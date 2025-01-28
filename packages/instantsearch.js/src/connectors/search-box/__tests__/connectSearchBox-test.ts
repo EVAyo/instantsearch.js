@@ -1,16 +1,20 @@
+import {
+  createSearchClient,
+  createSingleSearchResponse,
+} from '@instantsearch/mocks';
 import algoliasearchHelper, {
   SearchResults,
   SearchParameters,
 } from 'algoliasearch-helper';
-import connectSearchBox from '../connectSearchBox';
+
+import { createInstantSearch } from '../../../../test/createInstantSearch';
 import {
   createDisposeOptions,
   createInitOptions,
   createRenderOptions,
 } from '../../../../test/createWidget';
 import InstantSearch from '../../../lib/InstantSearch';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import { createSingleSearchResponse } from '@instantsearch/mocks/createAPIResponse';
+import connectSearchBox from '../connectSearchBox';
 
 describe('connectSearchBox', () => {
   const getInitializedWidget = (config = {}) => {
@@ -483,7 +487,9 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/search-box/
 
       const renderState = searchBox.getRenderState(
         {},
-        createRenderOptions({ searchMetadata: { isSearchStalled: true } })
+        createRenderOptions({
+          instantSearchInstance: createInstantSearch({ status: 'stalled' }),
+        })
       );
 
       expect(renderState.searchBox).toEqual({
@@ -570,7 +576,9 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/search-box/
       searchBox.init!(createInitOptions());
 
       const renderState = searchBox.getWidgetRenderState(
-        createRenderOptions({ searchMetadata: { isSearchStalled: true } })
+        createRenderOptions({
+          instantSearchInstance: createInstantSearch({ status: 'stalled' }),
+        })
       );
 
       expect(renderState).toEqual({

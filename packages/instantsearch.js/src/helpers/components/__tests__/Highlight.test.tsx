@@ -2,11 +2,12 @@
  * @jest-environment jsdom
  */
 /** @jsx h */
-import type { ComponentChildren } from '@algolia/ui-components-shared';
 import { render } from '@testing-library/preact';
 import { h } from 'preact';
 
 import { Highlight } from '../Highlight';
+
+import type { ComponentChildren } from 'instantsearch-ui-components';
 
 describe('Highlight', () => {
   test('renders single match', () => {
@@ -71,33 +72,33 @@ describe('Highlight', () => {
     );
 
     expect(container).toMatchInlineSnapshot(`
-<div>
-  <span
-    class="ais-Highlight"
-  >
-    <mark
-      class="ais-Highlight-highlighted"
-    >
-      te
-    </mark>
-    <span
-      class="ais-Highlight-nonHighlighted"
-    >
-      st
-    </span>
-    <span
-      class="ais-Highlight-separator"
-    >
-      , 
-    </span>
-    <span
-      class="ais-Highlight-nonHighlighted"
-    >
-      nothing
-    </span>
-  </span>
-</div>
-`);
+      <div>
+        <span
+          class="ais-Highlight"
+        >
+          <mark
+            class="ais-Highlight-highlighted"
+          >
+            te
+          </mark>
+          <span
+            class="ais-Highlight-nonHighlighted"
+          >
+            st
+          </span>
+          <span
+            class="ais-Highlight-separator"
+          >
+            , 
+          </span>
+          <span
+            class="ais-Highlight-nonHighlighted"
+          >
+            nothing
+          </span>
+        </span>
+      </div>
+    `);
   });
 
   test('renders path to match', () => {
@@ -277,29 +278,29 @@ describe('Highlight', () => {
     );
 
     expect(container).toMatchInlineSnapshot(`
-<div>
-  <span
-    class="ais-Highlight"
-  >
-    <strong>
-      it
-    </strong>
-    <small>
-      em1
-    </small>
-    <span
-      class="ais-Highlight-separator"
-    >
-      <strong>
-         - 
-      </strong>
-    </span>
-    <small>
-      item2
-    </small>
-  </span>
-</div>
-`);
+      <div>
+        <span
+          class="ais-Highlight"
+        >
+          <strong>
+            it
+          </strong>
+          <small>
+            em1
+          </small>
+          <span
+            class="ais-Highlight-separator"
+          >
+            <strong>
+               - 
+            </strong>
+          </span>
+          <small>
+            item2
+          </small>
+        </span>
+      </div>
+    `);
   });
 
   test('forwards custom class names and `div` props to the root element', () => {

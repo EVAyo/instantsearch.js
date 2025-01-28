@@ -1,23 +1,25 @@
+import {
+  createSearchClient,
+  createMultiSearchResponse,
+  createSingleSearchResponse,
+} from '@instantsearch/mocks';
+import { wait } from '@instantsearch/testutils/wait';
 import algoliasearchHelper, {
   SearchResults,
   SearchParameters,
 } from 'algoliasearch-helper';
+
 import {
   createInitOptions,
   createRenderOptions,
   createDisposeOptions,
 } from '../../../../test/createWidget';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import {
-  createMultiSearchResponse,
-  createSingleSearchResponse,
-} from '@instantsearch/mocks/createAPIResponse';
-import type { AutocompleteRenderState } from '../connectAutocomplete';
-import connectAutocomplete from '../connectAutocomplete';
-import { TAG_PLACEHOLDER } from '../../../lib/utils';
-import type { SearchClient, SearchResponse } from '../../../types';
-import { wait } from '@instantsearch/testutils/wait';
 import instantsearch from '../../../index.es';
+import { TAG_PLACEHOLDER } from '../../../lib/utils';
+import connectAutocomplete from '../connectAutocomplete';
+
+import type { SearchClient, SearchResponse } from '../../../types';
+import type { AutocompleteRenderState } from '../connectAutocomplete';
 
 describe('connectAutocomplete', () => {
   const getInitializedWidget = (config = {}) => {
@@ -238,6 +240,8 @@ search.addWidgets([
         _highlightResult: {
           foobar: {
             value: `<script>${TAG_PLACEHOLDER.highlightPreTag}foobar${TAG_PLACEHOLDER.highlightPostTag}</script>`,
+            matchLevel: 'full' as const,
+            matchedWords: ['foobar'],
           },
         },
         objectID: '1',
@@ -250,6 +254,8 @@ search.addWidgets([
           _highlightResult: {
             foobar: {
               value: '&lt;script&gt;<mark>foobar</mark>&lt;/script&gt;',
+              matchLevel: 'full',
+              matchedWords: ['foobar'],
             },
           },
           objectID: '1',
@@ -266,7 +272,9 @@ search.addWidgets([
           {
             indexId: 'index0',
             results: new SearchResults(helper.state, [
-              createSingleSearchResponse({ hits }),
+              createSingleSearchResponse({
+                hits,
+              }),
             ]),
             helper,
           },
@@ -293,9 +301,12 @@ search.addWidgets([
 
     const hits = [
       {
+        foobar: 'foobar',
         _highlightResult: {
           foobar: {
             value: `<script>${TAG_PLACEHOLDER.highlightPreTag}foobar${TAG_PLACEHOLDER.highlightPostTag}</script>`,
+            matchLevel: 'full' as const,
+            matchedWords: ['foobar'],
           },
         },
         objectID: '1',
@@ -776,6 +787,7 @@ search.addWidgets([
       expect(sendEventToInsights).toHaveBeenCalledTimes(2);
       expect(sendEventToInsights.mock.calls[0][0]).toEqual({
         eventType: 'view',
+        eventModifier: 'internal',
         hits: [
           {
             __position: 0,
@@ -794,6 +806,7 @@ search.addWidgets([
       });
       expect(sendEventToInsights.mock.calls[1][0]).toEqual({
         eventType: 'view',
+        eventModifier: 'internal',
         hits: [
           {
             __position: 0,
@@ -855,8 +868,8 @@ search.addWidgets([
         stalledSearchDelay: 1,
         indexName: 'indexName',
       });
-      instantSearchInstance.sendEventToInsights = jest.fn();
       instantSearchInstance.start();
+      instantSearchInstance.sendEventToInsights = jest.fn();
 
       instantSearchInstance.addWidgets([widget]);
 

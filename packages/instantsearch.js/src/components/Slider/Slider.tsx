@@ -1,23 +1,26 @@
 /** @jsx h */
 
+import { cx } from 'instantsearch-ui-components';
 import { h, Component } from 'preact';
-import type { HandleProps } from './Rheostat';
-import Rheostat from './Rheostat';
-import { cx } from '@algolia/ui-components-shared';
+
 import { range } from '../../lib/utils';
+
 import Pit from './Pit';
+import Rheostat from './Rheostat';
+
 import type { RangeBoundaries } from '../../connectors/range/connectRange';
+import type { ComponentCSSClasses } from '../../types';
 import type {
   RangeSliderCssClasses,
   RangeSliderWidgetParams,
 } from '../../widgets/range-slider/range-slider';
-import type { ComponentCSSClasses } from '../../types';
+import type { HandleProps } from './Rheostat';
 
 export type RangeSliderComponentCSSClasses =
   ComponentCSSClasses<RangeSliderCssClasses>;
 
 export type SliderProps = {
-  refine(values: RangeBoundaries): void;
+  refine: (values: RangeBoundaries) => void;
   min?: number;
   max?: number;
   values: RangeBoundaries;
@@ -89,8 +92,13 @@ class Slider extends Component<SliderProps> {
         props['data-handle-key'] === 1 && 'rheostat-handle-upper'
       );
 
+      const ariaLabel =
+        props['data-handle-key'] === 0
+          ? 'Minimum Filter Handle'
+          : 'Maximum Filter Handle';
+
       return (
-        <div {...props} className={className}>
+        <div {...props} className={className} aria-label={ariaLabel}>
           {tooltips && <div className="rheostat-tooltip">{value}</div>}
         </div>
       );
@@ -124,7 +132,7 @@ class Slider extends Component<SliderProps> {
           pitPoints={pitPoints}
           snap={true}
           snapPoints={snapPoints}
-          values={(this.isDisabled ? [min, max] : values) as number[]}
+          values={(this.isDisabled ? [min, max] : values) as [number, number]}
           disabled={this.isDisabled}
         />
       </div>

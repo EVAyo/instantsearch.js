@@ -1,6 +1,8 @@
-import algoliasearch from 'algoliasearch/lite';
+import { liteClient as algoliasearch } from 'algoliasearch/lite';
 import instantsearch from 'instantsearch.js';
 import { singleIndex } from 'instantsearch.js/es/lib/stateMappings';
+
+import 'instantsearch.css/themes/reset.css';
 
 import {
   articles,
@@ -26,15 +28,20 @@ const search = instantsearch({
   routing: {
     stateMapping: singleIndex('PROD_algolia_blog'),
   },
+  insights: true,
 });
 
 const datesDesktop = createDates({
   container: '[data-widget="dates-desktop"]',
-  header: 'Date',
+  header() {
+    return 'Date';
+  },
 });
 const datesMobile = createDates({
   container: '[data-widget="dates-mobile"]',
-  header: 'Date',
+  header() {
+    return 'Date';
+  },
 });
 const selectedTopicsDesktop = createSelectedTopics({
   container: '[data-widget="selected-topics-desktop"]',

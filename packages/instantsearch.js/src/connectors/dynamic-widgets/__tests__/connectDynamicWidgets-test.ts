@@ -1,24 +1,27 @@
-import { connectMenu, connectDynamicWidgets } from '../..';
-import { index } from '../../../widgets';
-import { widgetSnapshotSerializer } from '@instantsearch/testutils/widgetSnapshotSerializer';
 import {
-  createDisposeOptions,
-  createInitOptions,
-  createRenderOptions,
-} from '../../../../test/createWidget';
+  createMultiSearchResponse,
+  createSingleSearchResponse,
+  createSearchClient,
+} from '@instantsearch/mocks';
+import { widgetSnapshotSerializer } from '@instantsearch/testutils';
 import { wait } from '@instantsearch/testutils/wait';
 import algoliasearchHelper, {
   SearchParameters,
   SearchResults,
 } from 'algoliasearch-helper';
+
+import { connectMenu, connectDynamicWidgets } from '../..';
 import {
-  createMultiSearchResponse,
-  createSingleSearchResponse,
-} from '@instantsearch/mocks/createAPIResponse';
+  createDisposeOptions,
+  createInitOptions,
+  createRenderOptions,
+} from '../../../../test/createWidget';
+import { index } from '../../../widgets';
 import connectHierarchicalMenu from '../../hierarchical-menu/connectHierarchicalMenu';
-import type { DynamicWidgetsConnectorParams } from '../connectDynamicWidgets';
 import connectRefinementList from '../../refinement-list/connectRefinementList';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
+
+import type { SearchResponse } from '../../../types/algoliasearch';
+import type { DynamicWidgetsConnectorParams } from '../connectDynamicWidgets';
 
 expect.addSnapshotSerializer(widgetSnapshotSerializer);
 
@@ -56,30 +59,40 @@ describe('connectDynamicWidgets', () => {
       ).not.toThrow();
     });
 
-    it('fails when a non-star facet is given', () => {
+    it('fails when widgets is not an array', () => {
       expect(() =>
-        connectDynamicWidgets(() => {})(
+        connectDynamicWidgets(() => {})({
           // @ts-expect-error
-          { widgets: [], facets: ['lol'] }
-        )
+          widgets: {},
+        })
       ).toThrowErrorMatchingInlineSnapshot(`
-        "The \`facets\` option only accepts [] or [\\"*\\"], you passed [\\"lol\\"]
+        "The \`widgets\` option expects an array of widgets.
 
         See documentation: https://www.algolia.com/doc/api-reference/widgets/dynamic-widgets/js/#connector"
       `);
     });
 
-    it('fails when a multiple star facets are given', () => {
+    it('fails when facets is not an array', () => {
       expect(() =>
-        connectDynamicWidgets(() => {})(
+        connectDynamicWidgets(() => {})({
+          widgets: [],
           // @ts-expect-error
-          { widgets: [], facets: ['*', '*'] }
-        )
+          facets: {},
+        })
       ).toThrowErrorMatchingInlineSnapshot(`
-        "The \`facets\` option only accepts [] or [\\"*\\"], you passed [\\"*\\",\\"*\\"]
+        "The \`facets\` option only accepts an array of facets, you passed {}
 
         See documentation: https://www.algolia.com/doc/api-reference/widgets/dynamic-widgets/js/#connector"
       `);
+    });
+
+    it('does not fail when only some facets are given', () => {
+      expect(() =>
+        connectDynamicWidgets(() => {})({
+          widgets: [],
+          facets: ['a', 'b', 'c'],
+        })
+      ).not.toThrow();
     });
 
     it('does not fail when only star facet is given', () => {
@@ -327,7 +340,7 @@ describe('connectDynamicWidgets', () => {
               new SearchParameters(),
               createMultiSearchResponse({
                 userData: [{ MOCK_facetOrder: ['test1'] }],
-              }).results
+              }).results as Array<SearchResponse<any>>
             ),
           })
         );
@@ -350,7 +363,7 @@ describe('connectDynamicWidgets', () => {
               new SearchParameters(),
               createMultiSearchResponse({
                 userData: [{ MOCK_facetOrder: ['test2', 'test1'] }],
-              }).results
+              }).results as Array<SearchResponse<any>>
             ),
           })
         );
@@ -376,7 +389,7 @@ describe('connectDynamicWidgets', () => {
               new SearchParameters(),
               createMultiSearchResponse({
                 userData: [{ MOCK_facetOrder: ['test2'] }],
-              }).results
+              }).results as Array<SearchResponse<any>>
             ),
           })
         );
@@ -399,7 +412,7 @@ describe('connectDynamicWidgets', () => {
               new SearchParameters(),
               createMultiSearchResponse({
                 userData: [{ MOCK_facetOrder: ['test1', 'test4', 'test5'] }],
-              }).results
+              }).results as Array<SearchResponse<any>>
             ),
           })
         );
@@ -866,6 +879,35 @@ describe('connectDynamicWidgets', () => {
       ).toEqual(
         new SearchParameters({
           facets: ['existing', '*'],
+          maxValuesPerFacet: 20,
+        })
+      );
+    });
+
+    test('adds to existing facets', () => {
+      const dynamicWidgets = connectDynamicWidgets(() => {})({
+        facets: ['facet1', 'facet2'],
+        transformItems() {
+          return ['test1'];
+        },
+        widgets: [
+          connectMenu(() => {})({ attribute: 'test1' }),
+          connectHierarchicalMenu(() => {})({ attributes: ['test2', 'test3'] }),
+        ],
+      });
+
+      expect(
+        dynamicWidgets.getWidgetSearchParameters!(
+          new SearchParameters({
+            facets: ['existing'],
+          }),
+          {
+            uiState: {},
+          }
+        )
+      ).toEqual(
+        new SearchParameters({
+          facets: ['existing', 'facet1', 'facet2'],
           maxValuesPerFacet: 20,
         })
       );

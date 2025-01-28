@@ -1,6 +1,7 @@
-import type { SearchParameters, SearchResults } from 'algoliasearch-helper';
 import { createDocumentationMessageGenerator, warning } from '../../lib/utils';
+
 import type { WidgetFactory, WidgetRenderState } from '../../types';
+import type { SearchParameters, SearchResults } from 'algoliasearch-helper';
 
 export type AnalyticsWidgetParamsPushFunction = (
   /**
@@ -116,10 +117,10 @@ For the migration, visit https://www.algolia.com/doc/guides/building-search-ui/u
   ): string {
     const refinements: string[] = [];
 
+    // eslint-disable-next-line no-restricted-syntax
     for (const parameter in parameters) {
       if (parameters.hasOwnProperty(parameter)) {
         const values = parameters[parameter].join('+');
-
         refinements.push(
           `${encodeURIComponent(parameter)}=${encodeURIComponent(
             parameter
@@ -136,6 +137,7 @@ For the migration, visit https://www.algolia.com/doc/guides/building-search-ui/u
   ): string {
     const refinements: string[] = [];
 
+    // eslint-disable-next-line no-restricted-syntax
     for (const attribute in numericRefinements) {
       if (numericRefinements.hasOwnProperty(attribute)) {
         const filter = numericRefinements[attribute];
@@ -159,6 +161,7 @@ For the migration, visit https://www.algolia.com/doc/guides/building-search-ui/u
         } else if (filter.hasOwnProperty('=')) {
           const equals: string[] = [];
 
+          // eslint-disable-next-line no-restricted-syntax
           for (const equal in filter['=']) {
             // eslint-disable-next-line max-depth
             if (filter['='].hasOwnProperty(equal)) {
@@ -249,6 +252,9 @@ For the migration, visit https://www.algolia.com/doc/guides/building-search-ui/u
     },
 
     render({ results, state }) {
+      if (!results) {
+        return;
+      }
       if (isInitialSearch === true) {
         isInitialSearch = false;
 

@@ -1,44 +1,46 @@
 /** @jsx h */
 
+import { cx } from 'instantsearch-ui-components';
 import { h, render } from 'preact';
-import { cx } from '@algolia/ui-components-shared';
-import type { SearchResults } from 'algoliasearch-helper';
+
+import InfiniteHits from '../../components/InfiniteHits/InfiniteHits';
+import connectInfiniteHits from '../../connectors/infinite-hits/connectInfiniteHits';
+import { withInsights } from '../../lib/insights';
+import { component } from '../../lib/suit';
+import { prepareTemplateProps } from '../../lib/templating';
+import {
+  getContainerNode,
+  createDocumentationMessageGenerator,
+} from '../../lib/utils';
+
+import defaultTemplates from './defaultTemplates';
+
 import type {
   InfiniteHitsComponentCSSClasses,
   InfiniteHitsComponentTemplates,
 } from '../../components/InfiniteHits/InfiniteHits';
-import InfiniteHits from '../../components/InfiniteHits/InfiniteHits';
 import type {
   InfiniteHitsConnectorParams,
   InfiniteHitsRenderState,
   InfiniteHitsCache,
   InfiniteHitsWidgetDescription,
 } from '../../connectors/infinite-hits/connectInfiniteHits';
-import connectInfiniteHits from '../../connectors/infinite-hits/connectInfiniteHits';
-import {
-  getContainerNode,
-  createDocumentationMessageGenerator,
-} from '../../lib/utils';
-import { prepareTemplateProps } from '../../lib/templating';
-import { component } from '../../lib/suit';
-import { withInsights, withInsightsListener } from '../../lib/insights';
+import type { PreparedTemplateProps } from '../../lib/templating';
 import type {
   WidgetFactory,
   Template,
   TemplateWithBindEvent,
-  Hit,
   InsightsClient,
   Renderer,
+  BaseHit,
+  Hit,
 } from '../../types';
-import defaultTemplates from './defaultTemplates';
-import type { InsightsEvent } from '../../middlewares/createInsightsMiddleware';
-import type { PreparedTemplateProps } from '../../lib/templating';
+import type { SearchResults } from 'algoliasearch-helper';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'infinite-hits',
 });
 const suit = component('InfiniteHits');
-const InfiniteHitsWithInsightsListener = withInsightsListener(InfiniteHits);
 
 export type InfiniteHitsCSSClasses = Partial<{
   /**
@@ -80,36 +82,62 @@ export type InfiniteHitsCSSClasses = Partial<{
    * The disabled “Show more” button.
    */
   disabledLoadMore: string | string[];
+
+  /**
+   * Class names to apply to the banner element
+   */
+  bannerRoot: string | string[];
+
+  /**
+   * Class names to apply to the banner image element
+   */
+  bannerImage: string | string[];
+
+  /**
+   * Class names to apply to the banner link element
+   */
+  bannerLink: string | string[];
 }>;
 
-export type InfiniteHitsTemplates = Partial<{
-  /**
-   * The template to use when there are no results.
-   */
-  empty: Template<SearchResults>;
+export type InfiniteHitsTemplates<THit extends NonNullable<object> = BaseHit> =
+  Partial<{
+    /**
+     * The template to use when there are no results.
+     */
+    empty: Template<SearchResults<THit>>;
 
-  /**
-   * The template to use for the “Show previous” label.
-   */
-  showPreviousText: Template;
+    /**
+     * The template to use for the “Show previous” label.
+     */
+    showPreviousText: Template;
 
-  /**
-   * The template to use for the “Show more” label.
-   */
-  showMoreText: Template;
+    /**
+     * The template to use for the “Show more” label.
+     */
+    showMoreText: Template;
 
-  /**
-   * The template to use for each result.
-   */
-  item: TemplateWithBindEvent<
-    Hit & {
-      // @deprecated the index in the hits array, use __position instead, which is the absolute position
-      __hitIndex: number;
-    }
-  >;
-}>;
+    /**
+     * The template to use for each result.
+     */
+    item: TemplateWithBindEvent<
+      Hit<THit> & {
+        /** @deprecated the index in the hits array, use __position instead, which is the absolute position */
+        __hitIndex: number;
+      }
+    >;
 
-export type InfiniteHitsWidgetParams = {
+    /**
+     * Template to use for the banner.
+     */
+    banner: Template<{
+      banner: Required<InfiniteHitsRenderState['banner']>;
+      className: string;
+    }>;
+  }>;
+
+export type InfiniteHitsWidgetParams<
+  THit extends NonNullable<object> = BaseHit
+> = {
   /**
    * The CSS Selector or `HTMLElement` to insert the widget into.
    */
@@ -123,7 +151,7 @@ export type InfiniteHitsWidgetParams = {
   /**
    * The templates to use for the widget.
    */
-  templates?: InfiniteHitsTemplates;
+  templates?: InfiniteHitsTemplates<THit>;
 
   /**
    * Reads and writes hits from/to cache.
@@ -140,7 +168,7 @@ export type InfiniteHitsWidget = WidgetFactory<
 >;
 
 const renderer =
-  ({
+  <THit extends NonNullable<object> = BaseHit>({
     containerNode,
     cssClasses,
     renderState,
@@ -152,12 +180,12 @@ const renderer =
     renderState: {
       templateProps?: PreparedTemplateProps<InfiniteHitsComponentTemplates>;
     };
-    templates: InfiniteHitsTemplates;
+    templates: InfiniteHitsTemplates<THit>;
     showPrevious?: boolean;
   }): Renderer<InfiniteHitsRenderState, Partial<InfiniteHitsWidgetParams>> =>
   (
     {
-      hits,
+      items,
       results,
       showMore,
       showPrevious,
@@ -166,40 +194,47 @@ const renderer =
       instantSearchInstance,
       insights,
       bindEvent,
+      sendEvent,
+      banner,
     },
     isFirstRendering
   ) => {
     if (isFirstRendering) {
-      renderState.templateProps = prepareTemplateProps({
-        defaultTemplates,
-        templatesConfig: instantSearchInstance.templatesConfig,
-        templates,
-      });
+      renderState.templateProps =
+        prepareTemplateProps<InfiniteHitsComponentTemplates>({
+          defaultTemplates,
+          templatesConfig: instantSearchInstance.templatesConfig,
+          templates: templates as InfiniteHitsComponentTemplates,
+        });
       return;
     }
 
     render(
-      <InfiniteHitsWithInsightsListener
+      <InfiniteHits
         cssClasses={cssClasses}
-        hits={hits}
-        results={results}
-        hasShowPrevious={hasShowPrevious}
+        hits={items}
+        results={results!}
+        hasShowPrevious={hasShowPrevious!}
         showPrevious={showPrevious}
         showMore={showMore}
         templateProps={renderState.templateProps!}
         isFirstPage={isFirstPage}
         isLastPage={isLastPage}
         insights={insights as InsightsClient}
-        sendEvent={(event: InsightsEvent) => {
-          instantSearchInstance.sendEventToInsights(event);
-        }}
+        sendEvent={sendEvent}
         bindEvent={bindEvent}
+        banner={banner}
       />,
       containerNode
     );
   };
 
-const infiniteHits: InfiniteHitsWidget = (widgetParams) => {
+export default (function infiniteHits<
+  THit extends NonNullable<object> = BaseHit
+>(
+  widgetParams: InfiniteHitsWidgetParams<THit> &
+    InfiniteHitsConnectorParams<THit>
+) {
   const {
     container,
     escapeHTML,
@@ -233,6 +268,18 @@ const infiniteHits: InfiniteHitsWidget = (widgetParams) => {
       suit({ descendantName: 'loadMore', modifierName: 'disabled' }),
       userCssClasses.disabledLoadMore
     ),
+    bannerRoot: cx(
+      suit({ descendantName: 'banner' }),
+      userCssClasses.bannerRoot
+    ),
+    bannerImage: cx(
+      suit({ descendantName: 'banner-image' }),
+      userCssClasses.bannerImage
+    ),
+    bannerLink: cx(
+      suit({ descendantName: 'banner-link' }),
+      userCssClasses.bannerLink
+    ),
   };
 
   const specializedRenderer = renderer({
@@ -257,6 +304,4 @@ const infiniteHits: InfiniteHitsWidget = (widgetParams) => {
     }),
     $$widgetType: 'ais.infiniteHits',
   };
-};
-
-export default infiniteHits;
+} satisfies InfiniteHitsWidget);

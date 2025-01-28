@@ -1,8 +1,21 @@
 import { action } from '@storybook/addon-actions';
-import algoliasearch from 'algoliasearch/lite';
+import {
+  // @ts-ignore fails in v3, v4
+  liteClient as namedConstructor,
+  default as defaultConstructor,
+} from 'algoliasearch/lite';
 import instantsearch from '../../src';
 import defaultPlayground from '../playgrounds/default';
-import { InstantSearch, InstantSearchOptions } from '../../src/types';
+import {
+  InstantSearch,
+  InstantSearchOptions,
+  SearchClient,
+} from '../../src/types';
+
+const algoliasearch = (namedConstructor || defaultConstructor) as unknown as (
+  appId: string,
+  apiKey: string
+) => SearchClient;
 
 type InstantSearchUMDModule = typeof instantsearch;
 
@@ -94,14 +107,6 @@ export const withHits =
     const rightPanelPlaygroundElement = document.createElement('div');
     rightPanelPlaygroundElement.classList.add('panel-right');
     playgroundElement.appendChild(rightPanelPlaygroundElement);
-
-    search.addWidgets([
-      instantsearch.widgets.configure({
-        hitsPerPage: 4,
-        attributesToSnippet: ['description:15'],
-        snippetEllipsisText: '[…]',
-      }),
-    ]);
 
     playground({
       search,

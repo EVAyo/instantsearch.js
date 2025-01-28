@@ -1,14 +1,15 @@
-import type { AlgoliaSearchHelper } from 'algoliasearch-helper';
+import { createSearchClient } from '@instantsearch/mocks';
 import algoliasearchHelper, { SearchParameters } from 'algoliasearch-helper';
 
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import connectConfigure from '../connectConfigure';
 import {
   createInitOptions,
   createRenderOptions,
   createDisposeOptions,
 } from '../../../../test/createWidget';
 import { noop } from '../../../lib/utils';
+import connectConfigure from '../connectConfigure';
+
+import type { AlgoliaSearchHelper } from 'algoliasearch-helper';
 
 describe('connectConfigure', () => {
   let helper: AlgoliaSearchHelper;
@@ -288,7 +289,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/configure/j
           configure: {
             refine() {},
             widgetParams: {
-              searchParameters: { removeStopWords: ['group'] },
+              searchParameters: { removeStopWords: ['en'] },
             },
           },
         },
@@ -299,7 +300,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/configure/j
         refine: expect.any(Function),
         widgetParams: {
           searchParameters: {
-            removeStopWords: ['group'],
+            removeStopWords: ['en'],
             facetFilters: ['brand:Samsung'],
           },
         },

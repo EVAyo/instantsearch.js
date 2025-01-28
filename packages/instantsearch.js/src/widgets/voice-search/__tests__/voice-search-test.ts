@@ -2,25 +2,29 @@
  * @jest-environment jsdom
  */
 
-import type { VNode } from 'preact';
-import { render as preactRender } from 'preact';
-import algoliasearch from 'algoliasearch';
-import type { AlgoliaSearchHelper as Helper } from 'algoliasearch-helper';
+import {
+  createSearchClient,
+  createSingleSearchResponse,
+} from '@instantsearch/mocks';
+import { castToJestMock } from '@instantsearch/testutils/castToJestMock';
 import algoliasearchHelper, {
   SearchResults,
   SearchParameters,
 } from 'algoliasearch-helper';
+import { render as preactRender } from 'preact';
+
 import {
   createInitOptions,
   createRenderOptions,
 } from '../../../../test/createWidget';
-import { createSingleSearchResponse } from '@instantsearch/mocks/createAPIResponse';
-import { castToJestMock } from '@instantsearch/testutils/castToJestMock';
+import voiceSearch from '../voice-search';
+
+import type { VoiceSearchProps } from '../../../components/VoiceSearch/VoiceSearch';
+import type { VoiceSearchHelper } from '../../../lib/voiceSearchHelper/types';
 import type { Widget } from '../../../types';
 import type { VoiceSearchWidgetParams } from '../voice-search';
-import voiceSearch from '../voice-search';
-import type { VoiceSearchHelper } from '../../../lib/voiceSearchHelper/types';
-import type { VoiceSearchProps } from '../../../components/VoiceSearch/VoiceSearch';
+import type { AlgoliaSearchHelper as Helper } from 'algoliasearch-helper';
+import type { VNode } from 'preact';
 
 const render = castToJestMock(preactRender);
 jest.mock('preact', () => {
@@ -82,7 +86,7 @@ describe('voiceSearch()', () => {
   beforeEach(() => {
     render.mockClear();
 
-    helper = algoliasearchHelper(algoliasearch('APP_ID', 'API_KEY'), '', {});
+    helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.setQuery = jest.fn();
     helper.search = jest.fn();
     helper.state = new SearchParameters({ query: '' });

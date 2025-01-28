@@ -1,5 +1,5 @@
+import type { IndexWidget } from '../../types';
 import type { SearchParameters } from 'algoliasearch-helper';
-import type { IndexWidget } from '../../widgets/index/index';
 
 export function resolveSearchParameters(
   current: IndexWidget

@@ -1,20 +1,23 @@
-import type { SearchResults } from 'algoliasearch-helper';
-import type { SendEventForFacet } from '../../lib/utils';
 import {
   checkRendering,
   createDocumentationMessageGenerator,
   createSendEventForFacet,
   noop,
+  warning,
 } from '../../lib/utils';
+
+import type { SendEventForFacet } from '../../lib/utils';
 import type {
   Connector,
   CreateURL,
+  IndexUiState,
   RenderOptions,
   SortBy,
   TransformItems,
   Widget,
   WidgetRenderState,
 } from '../../types';
+import type { SearchResults } from 'algoliasearch-helper';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'menu',
@@ -85,7 +88,7 @@ export type MenuRenderState = {
   /**
    * Filter the search to item value.
    */
-  refine(value: string): void;
+  refine: (value: string) => void;
   /**
    * True if refinement can be applied.
    */
@@ -97,7 +100,7 @@ export type MenuRenderState = {
   /**
    * Toggles the number of values displayed between `limit` and `showMore.limit`.
    */
-  toggleShowMore(): void;
+  toggleShowMore: () => void;
   /**
    * `true` if the toggleShowMore button can be activated (enough items to display more or
    * already displaying more than `limit` items)
@@ -261,10 +264,13 @@ const connectMenu: MenuConnector = function connectMenu(
 
         if (!_createURL) {
           _createURL = (facetValue: string) =>
-            createURL(
-              helper.state
-                .resetPage()
-                .toggleFacetRefinement(attribute, facetValue)
+            createURL((uiState) =>
+              this.getWidgetUiState(uiState, {
+                searchParameters: helper.state
+                  .resetPage()
+                  .toggleFacetRefinement(attribute, facetValue),
+                helper,
+              })
             );
         }
 
@@ -272,7 +278,7 @@ const connectMenu: MenuConnector = function connectMenu(
           _refine = function (facetValue: string) {
             const [refinedItem] =
               helper.getHierarchicalFacetBreadcrumb(attribute);
-            sendEvent!('click', facetValue ? facetValue : refinedItem);
+            sendEvent!('click:internal', facetValue ? facetValue : refinedItem);
             helper
               .toggleFacetRefinement(
                 attribute,
@@ -328,21 +334,33 @@ const connectMenu: MenuConnector = function connectMenu(
         const [value] =
           searchParameters.getHierarchicalFacetBreadcrumb(attribute);
 
-        if (!value) {
-          return uiState;
-        }
-
-        return {
-          ...uiState,
-          menu: {
-            ...uiState.menu,
-            [attribute]: value,
+        return removeEmptyRefinementsFromUiState(
+          {
+            ...uiState,
+            menu: {
+              ...uiState.menu,
+              [attribute]: value,
+            },
           },
-        };
+          attribute
+        );
       },
 
       getWidgetSearchParameters(searchParameters, { uiState }) {
         const value = uiState.menu && uiState.menu[attribute];
+
+        if (
+          searchParameters.isConjunctiveFacet(attribute) ||
+          searchParameters.isDisjunctiveFacet(attribute)
+        ) {
+          warning(
+            false,
+            `Menu: Attribute "${attribute}" is already used by another widget applying conjunctive or disjunctive faceting.
+As this is not supported, please make sure to remove this other widget or this Menu widget will not work at all.`
+          );
+
+          return searchParameters;
+        }
 
         const withFacetConfiguration = searchParameters
           .removeHierarchicalFacet(attribute)
@@ -381,5 +399,24 @@ const connectMenu: MenuConnector = function connectMenu(
     };
   };
 };
+
+function removeEmptyRefinementsFromUiState(
+  indexUiState: IndexUiState,
+  attribute: string
+): IndexUiState {
+  if (!indexUiState.menu) {
+    return indexUiState;
+  }
+
+  if (indexUiState.menu[attribute] === undefined) {
+    delete indexUiState.menu[attribute];
+  }
+
+  if (Object.keys(indexUiState.menu).length === 0) {
+    delete indexUiState.menu;
+  }
+
+  return indexUiState;
+}
 
 export default connectMenu;

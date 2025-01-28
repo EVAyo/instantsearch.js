@@ -2,10 +2,11 @@
  * @jest-environment jsdom
  */
 /* global google */
-import type { PlacesInstance } from 'places.js';
 import * as widgets from '..';
+
 import type { UnknownWidgetFactory, Widget } from '../../types';
 import type { IndexWidget } from '../index/index';
+import type { PlacesInstance } from 'places.js';
 
 /**
  * Checklist when adding a new widget
@@ -145,6 +146,16 @@ function initiateAllWidgets(): Array<[WidgetNames, Widget | IndexWidget]> {
       case 'EXPERIMENTAL_answers': {
         const EXPERIMENTAL_answers = widget as Widgets['EXPERIMENTAL_answers'];
         return EXPERIMENTAL_answers({ container, queryLanguages: ['en'] });
+      }
+      case 'frequentlyBoughtTogether':
+      case 'relatedProducts':
+      case 'lookingSimilar': {
+        const recommendWidgetWithObjectIDs =
+          widget as Widgets['frequentlyBoughtTogether'];
+        return recommendWidgetWithObjectIDs({
+          container,
+          objectIDs: ['objectID'],
+        });
       }
       default: {
         const defaultWidget = widget as UnknownWidgetFactory;

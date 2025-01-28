@@ -1,19 +1,23 @@
+import {
+  createSearchClient,
+  createSingleSearchResponse,
+} from '@instantsearch/mocks';
 import algoliasearchHelper, { SearchResults } from 'algoliasearch-helper';
+
+import { createInstantSearch } from '../../../../test/createInstantSearch';
 import {
   createDisposeOptions,
   createInitOptions,
   createRenderOptions,
 } from '../../../../test/createWidget';
-import { createInstantSearch } from '../../../../test/createInstantSearch';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import { createSingleSearchResponse } from '@instantsearch/mocks/createAPIResponse';
+import connectInfiniteHitsWithInsights from '../connectInfiniteHitsWithInsights';
+
 import type {
   InstantSearch,
   InitOptions,
   RenderOptions,
   Hit,
 } from '../../../types';
-import connectInfiniteHitsWithInsights from '../connectInfiniteHitsWithInsights';
 
 jest.mock('../../../lib/utils/hits-absolute-position', () => ({
   addAbsolutePosition: (hits: Hit[]) => hits,
@@ -49,7 +53,7 @@ describe('connectInfiniteHitsWithInsights', () => {
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptionsWithInsights({
         state: helper.state,
         helper,
@@ -67,7 +71,7 @@ describe('connectInfiniteHitsWithInsights', () => {
       createSingleSearchResponse({ hits }),
     ]);
 
-    widget.render!(
+    widget.render(
       createRenderOptionsWithInsights({
         state: helper.state,
         results,
@@ -87,7 +91,7 @@ describe('connectInfiniteHitsWithInsights', () => {
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptionsWithInsights({
         state: helper.state,
         helper,
@@ -102,7 +106,7 @@ describe('connectInfiniteHitsWithInsights', () => {
       createSingleSearchResponse({ hits }),
     ]);
 
-    widget.render!(
+    widget.render(
       createRenderOptionsWithInsights({
         state: helper.state,
         results,
@@ -121,7 +125,7 @@ describe('connectInfiniteHitsWithInsights', () => {
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     const widget = makeWidget({});
     expect(() =>
-      widget.dispose!(createDisposeOptions({ helper, state: helper.state }))
+      widget.dispose(createDisposeOptions({ helper, state: helper.state }))
     ).not.toThrow();
   });
 });

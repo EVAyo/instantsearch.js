@@ -3,12 +3,13 @@
  */
 /** @jsx h */
 
-import { h } from 'preact';
 import { mount } from '@instantsearch/testutils/enzyme';
 import { render } from '@testing-library/preact';
-import Stats from '../Stats';
-import defaultTemplates from '../../../widgets/stats/defaultTemplates';
+import { h } from 'preact';
+
 import createHelpers from '../../../lib/createHelpers';
+import defaultTemplates from '../../../widgets/stats/defaultTemplates';
+import Stats from '../Stats';
 
 describe('Stats', () => {
   const cssClasses = {
@@ -30,22 +31,18 @@ describe('Stats', () => {
 
     expect(wrapper.find('Template').props().data).toMatchObject(defaultProps);
     expect(wrapper).toMatchInlineSnapshot(`
-      [
-        <div
-          className="root"
-        >
-          [
-            <span
-              className="text"
-              dangerouslySetInnerHTML={
-                {
-                  "__html": "1,234 results found in 42ms",
-                }
-              }
-            />,
-          ]
-        </div>,
-      ]
+      <div
+        className="root"
+      >
+        <span
+          className="text"
+          dangerouslySetInnerHTML={
+            {
+              "__html": "1,234 results found in 42ms",
+            }
+          }
+        />
+      </div>
     `);
   });
 

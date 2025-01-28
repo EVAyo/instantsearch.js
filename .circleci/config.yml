@@ -1,4 +1,7 @@
-version: 2
+version: 2.1
+
+orbs:
+  slack: circleci/slack@4.12.1
 
 references:
   workspace_root: &workspace_root ~/instantsearch
@@ -30,50 +33,115 @@ references:
 defaults: &defaults
   working_directory: ~/instantsearch
   docker:
-    - image: cimg/node:14.18.0
+    - image: cimg/node:20.10.0
 
 workflows:
   version: 2
   ci:
+    when:
+      not:
+        equal: [scheduled_pipeline, << pipeline.trigger_source >>]
     jobs:
-      - build
+      - build:
+          context: fx-libraries
+      - test metadata
       - lint:
           requires:
             - build
       - unit tests:
           requires:
             - build
-      - legacy algoliasearch:
+      - legacy algoliasearch v3:
+          requires:
+            - build
+      - legacy algoliasearch v4:
+          requires:
+            - build
+      - vue v3:
           requires:
             - build
       - examples:
           requires:
             - build
+          filters:
+            branches:
+              only:
+                - master
+      - helper docs:
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - master
       - e2e tests:
+          context: fx-libraries
           requires:
             - examples
+          matrix:
+            parameters:
+              browser: [chrome, firefox, internet explorer]
+          filters:
+            branches:
+              only:
+                - master
+      - e2e tests router nextjs:
+          context: fx-libraries
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - master
       - release if needed:
+          context: fx-libraries
           requires:
             - build
             - lint
             - unit tests
             - examples
-            - legacy algoliasearch
+            - legacy algoliasearch v3
+            - legacy algoliasearch v4
+            - helper docs
             - e2e tests
           filters:
             branches:
               only:
                 - master
   scheduled release:
-    triggers:
-      - schedule:
-          cron: '0 9 * * 2'
-          filters:
-            branches:
-              only:
-                - master
+    # This workflow is triggered by a schedule pipeline.
+    # See: https://app.circleci.com/settings/project/github/algolia/instantsearch/triggers
+    when:
+      and:
+        - equal: [scheduled_pipeline, << pipeline.trigger_source >>]
+        - equal: [scheduled_release, << pipeline.schedule.name >>]
     jobs:
-      - prepare release
+      - prepare release:
+          context: fx-libraries
+  scheduled e2e:
+    # This workflow is triggered by a schedule pipeline.
+    # See: https://app.circleci.com/settings/project/github/algolia/instantsearch/triggers
+    when:
+      and:
+        - equal: [scheduled_pipeline, << pipeline.trigger_source >>]
+        - equal: [scheduled_e2e, << pipeline.schedule.name >>]
+    jobs:
+      - build:
+          context: fx-libraries
+      - examples:
+          requires:
+            - build
+      - e2e tests:
+          context: fx-libraries
+          requires:
+            - examples
+          matrix:
+            parameters:
+              browser: [chrome, firefox, internet explorer]
+      - e2e tests router nextjs:
+          context: fx-libraries
+          requires:
+            - build
 
 jobs:
   build:
@@ -88,7 +156,7 @@ jobs:
       - run:
           name: Build library
           command: |
-            yarn run build --ignore='example-*'
+            yarn run build:ci
       - run:
           name: Test packages size
           command: yarn run test:size
@@ -98,12 +166,34 @@ jobs:
       - persist_to_workspace:
           root: *workspace_root
           paths:
+            - packages/algolia-experiences/dist
+            - packages/algoliasearch-helper/dist
             - packages/instantsearch.js/es
             - packages/instantsearch.js/cjs
             - packages/instantsearch.js/dist
+            - packages/react-instantsearch/dist
+            - packages/react-instantsearch-core/dist
+            - packages/react-instantsearch-router-nextjs/dist
+            - packages/react-instantsearch-nextjs/dist
+            - packages/vue-instantsearch/vue2
+            - packages/vue-instantsearch/vue3
+            - packages/instantsearch-ui-components/dist
+
+  test metadata:
+    <<: *defaults
+    steps:
+      - checkout
+      - *attach_workspace
+      - *install_yarn_version
+      - run:
+          name: Test package versions
+          command: yarn run test:versions
 
   lint:
     <<: *defaults
+    resource_class: large
+    environment:
+      NODE_OPTIONS: '--max-old-space-size=4096'
     steps:
       - checkout
       - *attach_workspace
@@ -117,7 +207,7 @@ jobs:
           name: Type Checking
           command: yarn run type-check
 
-  legacy algoliasearch:
+  legacy algoliasearch v3:
     <<: *defaults
     steps:
       - checkout
@@ -130,10 +220,35 @@ jobs:
           command: |
             ./scripts/legacy/downgrade-algoliasearch-dependency.js
       - run:
+          name: Unit & Integration tests
+          command: yarn run test:v3
+      - run:
           name: Type Checking
           command: yarn run type-check:v3
 
-  unit tests:
+  legacy algoliasearch v4:
+    <<: *defaults
+    resource_class: large
+    steps:
+      - checkout
+      - *attach_workspace
+      - *install_yarn_version
+      - *restore_yarn_cache
+      - *run_yarn_install
+      - run:
+          name: Update dependencies
+          command: |
+            ./scripts/legacy/downgrade-algoliasearch-v4.js
+      - run:
+          name: Unit & Integration tests
+          command: yarn run test:ci:v4
+      - store_test_results:
+          path: junit/jest/
+      - run:
+          name: Type Checking
+          command: yarn run type-check:v4
+
+  vue v3:
     <<: *defaults
     steps:
       - checkout
@@ -142,8 +257,30 @@ jobs:
       - *restore_yarn_cache
       - *run_yarn_install
       - run:
+          name: Update dependencies
+          command: |
+            yarn run prepare-vue3
+      - run:
+          name: Vue Unit tests
+          command: yarn run jest packages/vue-instantsearch --ci --maxWorkers=4
+      - store_test_results:
+          path: junit/jest/
+      - run:
+          name: Vue 3 Test Exports
+          command: yarn workspace vue-instantsearch run test:exports:vue3
+
+  unit tests:
+    <<: *defaults
+    resource_class: large
+    steps:
+      - checkout
+      - *attach_workspace
+      - *install_yarn_version
+      - *restore_yarn_cache
+      - *run_yarn_install
+      - run:
           name: Unit tests
-          command: yarn run test --maxWorkers=4
+          command: yarn run test:ci
       - store_test_results:
           path: junit/jest/
 
@@ -164,8 +301,30 @@ jobs:
           paths:
             - website/examples
 
+  helper docs:
+    <<: *defaults
+    steps:
+      - checkout
+      - *attach_workspace
+      - *install_yarn_version
+      - *restore_yarn_cache
+      - *run_yarn_install
+      - run:
+          name: Build helper documentation
+          command: yarn workspace algoliasearch-helper run doc
+      - persist_to_workspace:
+          root: *workspace_root
+          paths:
+            - website/algoliasearch-helper-js
+
   e2e tests:
     <<: *defaults
+    parameters:
+      browser:
+        type: string
+    environment:
+      E2E_BROWSER: << parameters.browser >>
+    resource_class: large
     steps:
       - checkout
       - *attach_workspace
@@ -177,6 +336,72 @@ jobs:
           command: yarn run test:e2e:saucelabs
       - store_test_results:
           path: junit/wdio/
+      - slack/notify:
+          channel: $SLACK_E2E_NOTIF_CHANNEL
+          event: fail
+          # See: https://app.slack.com/block-kit-builder/
+          custom: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": ":warning: End-to-end tests failed",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Project*: $CIRCLE_PROJECT_REPONAME"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Browser*: << parameters.browser >>"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "CircleCI"
+                      },
+                      "url": "$CIRCLE_BUILD_URL"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "SauceLabs"
+                      },
+                      "url": "https://app.saucelabs.com/dashboard/tests/vdc"
+                    }
+                  ]
+                }
+              ]
+            }
+
+  e2e tests router nextjs:
+    <<: *defaults
+    resource_class: large
+    steps:
+      - checkout
+      - *attach_workspace
+      - *install_yarn_version
+      - *restore_yarn_cache
+      - *run_yarn_install
+      - run:
+          name: End-to-end tests
+          command: yarn workspace react-instantsearch-router-nextjs run test:e2e:saucelabs
+      - store_test_results:
+          path: packages/react-instantsearch-router-nextjs/junit/wdio/
 
   release if needed:
     <<: *defaults
@@ -189,6 +414,8 @@ jobs:
       - run:
           name: Trigger a release if the latest commit is a release commit
           command: |
+            git config --global user.email "instantsearch-bot@algolia.com"
+            git config --global user.name "InstantSearch[bot]"
             yarn shipjs trigger
 
   prepare release:
@@ -202,5 +429,5 @@ jobs:
           name: Prepare a pull request for next release
           command: |
             git config --global user.email "instantsearch-bot@algolia.com"
-            git config --global user.name "InstantSearch"
+            git config --global user.name "InstantSearch[bot]"
             yarn run shipjs prepare --yes --no-browse

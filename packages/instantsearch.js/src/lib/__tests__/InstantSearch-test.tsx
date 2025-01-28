@@ -3,22 +3,25 @@
  */
 /** @jsx h */
 
-import type preact from 'preact';
-import { h, render, createRef } from 'preact';
-import originalHelper from 'algoliasearch-helper';
-import InstantSearch from '../InstantSearch';
-import version from '../version';
-import { connectSearchBox, connectPagination } from '../../connectors';
-import { index } from '../../widgets';
-import { noop, warning } from '../utils';
 import {
   createSearchClient,
   createControlledSearchClient,
-} from '@instantsearch/mocks/createSearchClient';
-import { createRenderOptions, createWidget } from '../../../test/createWidget';
+  createMultiSearchResponse,
+  createSingleSearchResponse,
+} from '@instantsearch/mocks';
 import { castToJestMock } from '@instantsearch/testutils/castToJestMock';
-import type { IndexWidget } from '../../widgets/index/index';
-import type { UiState, Widget } from '../../types';
+import { wait } from '@instantsearch/testutils/wait';
+import originalHelper from 'algoliasearch-helper';
+import { h, render, createRef } from 'preact';
+
+import { createRenderOptions, createWidget } from '../../../test/createWidget';
+import { connectSearchBox, connectPagination } from '../../connectors';
+import { createInsightsMiddleware } from '../../middlewares';
+import { index } from '../../widgets';
+import InstantSearch from '../InstantSearch';
+import { noop, warning } from '../utils';
+import version from '../version';
+
 import type {
   PaginationConnectorParams,
   PaginationWidgetDescription,
@@ -27,7 +30,8 @@ import type {
   SearchBoxWidgetDescription,
   SearchBoxConnectorParams,
 } from '../../connectors/search-box/connectSearchBox';
-import { wait } from '@instantsearch/testutils/wait';
+import type { UiState, Widget, IndexWidget } from '../../types';
+import type { RefObject } from 'preact';
 
 type SearchBoxWidgetInstance = Widget<
   SearchBoxWidgetDescription & { widgetParams: SearchBoxConnectorParams }
@@ -76,18 +80,6 @@ describe('Usage', () => {
     warning.cache = {};
   });
 
-  it('throws without indexName', () => {
-    expect(() => {
-      // @ts-expect-error
-      // eslint-disable-next-line no-new
-      new InstantSearch({ indexName: undefined });
-    }).toThrowErrorMatchingInlineSnapshot(`
-"The \`indexName\` option is required.
-
-See documentation: https://www.algolia.com/doc/api-reference/widgets/instantsearch/js/"
-`);
-  });
-
   it('throws without searchClient', () => {
     expect(() => {
       // @ts-expect-error
@@ -110,6 +102,63 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/instantsear
 
 See: https://www.algolia.com/doc/guides/building-search-ui/going-further/backend-search/in-depth/backend-instantsearch/js/"
 `);
+  });
+
+  describe('root index warning', () => {
+    it('warns if no index is provided', async () => {
+      await expect(async () => {
+        const search = new InstantSearch({
+          searchClient: createSearchClient(),
+        });
+        search.addWidgets([createWidget()]);
+        search.start();
+        await wait(0);
+      }).toWarnDev(
+        '[InstantSearch.js]: No indexName provided, nor an explicit index widget in the widgets tree. This is required to be able to display results.'
+      );
+    });
+
+    it('does not warn if indexName is provided', async () => {
+      await expect(async () => {
+        const search = new InstantSearch({
+          searchClient: createSearchClient(),
+          indexName: 'indexName',
+        });
+
+        search.addWidgets([createWidget()]);
+        search.start();
+        await wait(0);
+      }).not.toWarnDev(
+        '[InstantSearch.js]: No indexName provided, nor an explicit index widget in the widgets tree. This is required to be able to display results.'
+      );
+    });
+
+    it('does not warn if no index and no widgets are provided', async () => {
+      await expect(async () => {
+        const search = new InstantSearch({
+          searchClient: createSearchClient(),
+        });
+
+        search.start();
+        await wait(0);
+      }).not.toWarnDev(
+        '[InstantSearch.js]: No indexName provided, nor an explicit index widget in the widgets tree. This is required to be able to display results.'
+      );
+    });
+
+    it('does not warn if index widget is provided', async () => {
+      await expect(async () => {
+        const search = new InstantSearch({
+          searchClient: createSearchClient(),
+        });
+
+        search.addWidgets([index({ indexName: 'indexName' })]);
+        search.start();
+        await wait(0);
+      }).not.toWarnDev(
+        '[InstantSearch.js]: No indexName provided, nor an explicit index widget in the widgets tree. This is required to be able to display results.'
+      );
+    });
   });
 
   it('throws if insightsClient is not a function', () => {
@@ -425,6 +474,224 @@ See https://www.algolia.com/doc/api-reference/widgets/configure/js/`);
     expect(search.helper!.lastResults).not.toBe(null);
   });
 
+  describe('insights middleware', () => {
+    const createSearchClientWithAutomaticInsightsOptedIn = () =>
+      createSearchClient({
+        search: jest.fn((requests) => {
+          return Promise.resolve(
+            createMultiSearchResponse(
+              ...requests.map((request) => {
+                return createSingleSearchResponse<any>({
+                  ...(request.indexName === 'indexNameWithAutomaticInsights'
+                    ? { _automaticInsights: true }
+                    : undefined),
+                  index: request.indexName,
+                  query: (request as any).query || request.params.query,
+                  ...(request.indexName === 'indexNameWithAutomaticInsights'
+                    ? { queryID: 'queryID' }
+                    : undefined),
+                  hits: [{ objectID: `${request.indexName}-objectID1` }],
+                });
+              })
+            )
+          );
+        }),
+      });
+    const mapMiddlewares = (middlewares: InstantSearch['middleware']) =>
+      middlewares.map(
+        // @ts-ignore: $$automatic is only applicable to insights middleware
+        ({ instance: { $$type, $$internal, $$automatic } }) => ({
+          $$type,
+          $$internal,
+          $$automatic,
+        })
+      );
+
+    test('insights: undefined does not add the insights middleware if `_automaticInsights: true` is not found in initial response', async () => {
+      const search = new InstantSearch({
+        indexName: 'indexName',
+        searchClient: createSearchClientWithAutomaticInsightsOptedIn(),
+      });
+
+      search.addWidgets([
+        virtualSearchBox({}),
+        index({ indexName: 'indexName2' }).addWidgets([virtualSearchBox({})]),
+      ]);
+      search.start();
+
+      await wait(0);
+
+      expect(mapMiddlewares(search.middleware)).toEqual([]);
+    });
+
+    test('insights: undefined adds the insights middleware if `_automaticInsights: true` is found in at least one index in initial response', async () => {
+      const searchClient = createSearchClientWithAutomaticInsightsOptedIn();
+      const search = new InstantSearch({
+        indexName: 'indexNameWithAutomaticInsights',
+        searchClient,
+      });
+
+      search.addWidgets([
+        virtualSearchBox({}),
+        index({ indexName: 'indexName' }).addWidgets([virtualSearchBox({})]),
+      ]);
+      search.start();
+
+      await wait(0);
+
+      expect(searchClient.search).toHaveBeenCalledTimes(1);
+      expect(mapMiddlewares(search.middleware)).toEqual([
+        {
+          $$type: 'ais.insights',
+          $$internal: true,
+          $$automatic: true,
+        },
+      ]);
+    });
+
+    test('insights: true adds only one insights middleware', () => {
+      const search = new InstantSearch({
+        searchClient: createSearchClientWithAutomaticInsightsOptedIn(),
+        indexName: 'test',
+        insights: true,
+      });
+
+      expect(mapMiddlewares(search.middleware)).toEqual([
+        {
+          $$type: 'ais.insights',
+          $$internal: true,
+          $$automatic: false,
+        },
+      ]);
+    });
+
+    test('insights: true adds only one insights middleware when `_automaticInsights: true` is also set', async () => {
+      const search = new InstantSearch({
+        searchClient: createSearchClientWithAutomaticInsightsOptedIn(),
+        indexName: 'indexNameWithAutomaticInsights',
+        insights: true,
+      });
+
+      search.addWidgets([virtualSearchBox({})]);
+      search.start();
+
+      await wait(0);
+
+      expect(mapMiddlewares(search.middleware)).toEqual([
+        {
+          $$type: 'ais.insights',
+          $$internal: true,
+          $$automatic: false,
+        },
+      ]);
+    });
+
+    test('insights: options adds only one insights middleware', () => {
+      const search = new InstantSearch({
+        searchClient: createSearchClientWithAutomaticInsightsOptedIn(),
+        indexName: 'test',
+        insights: {
+          insightsInitParams: {
+            useCookie: false,
+          },
+        },
+      });
+
+      expect(mapMiddlewares(search.middleware)).toEqual([
+        {
+          $$type: 'ais.insights',
+          $$internal: true,
+          $$automatic: false,
+        },
+      ]);
+    });
+
+    test('insights: options passes options to middleware', () => {
+      const insightsClient = Object.assign(jest.fn(), { version: '2.17.2' });
+      const search = new InstantSearch({
+        searchClient: createSearchClientWithAutomaticInsightsOptedIn(),
+        indexName: 'test',
+        insights: {
+          insightsClient,
+        },
+      });
+      search.start();
+
+      expect(mapMiddlewares(search.middleware)).toEqual([
+        {
+          $$type: 'ais.insights',
+          $$internal: true,
+          $$automatic: false,
+        },
+      ]);
+
+      // it's called a couple times setting up the middleware
+      expect(insightsClient).toHaveBeenCalled();
+      insightsClient.mockClear();
+
+      search.sendEventToInsights({
+        insightsMethod: 'clickedObjectIDsAfterSearch',
+        payload: { eventName: 'Add to cart' } as any,
+        eventType: 'click',
+        widgetType: 'ais.hits',
+      });
+
+      expect(insightsClient).toHaveBeenCalledTimes(1);
+      expect(insightsClient).toHaveBeenCalledWith(
+        'clickedObjectIDsAfterSearch',
+        { eventName: 'Add to cart', algoliaSource: ['instantsearch'] },
+        {
+          headers: {
+            'X-Algolia-API-Key': 'apiKey',
+            'X-Algolia-Application-Id': 'appId',
+          },
+        }
+      );
+    });
+
+    test('insights: false disables default insights', () => {
+      const search = new InstantSearch({
+        searchClient: createSearchClientWithAutomaticInsightsOptedIn(),
+        indexName: 'test',
+        insights: false,
+      });
+
+      expect(mapMiddlewares(search.middleware)).toEqual([]);
+    });
+
+    test('insights: false does not add Insights middleware even if `_automaticInsights: true` is set', async () => {
+      const search = new InstantSearch({
+        searchClient: createSearchClientWithAutomaticInsightsOptedIn(),
+        indexName: 'indexNameWithAutomaticInsights',
+        insights: false,
+      });
+
+      search.addWidgets([virtualSearchBox({})]);
+      search.start();
+
+      await wait(0);
+
+      expect(mapMiddlewares(search.middleware)).toEqual([]);
+    });
+
+    test("users' middleware overrides the builtin one", () => {
+      const search = new InstantSearch({
+        searchClient: createSearchClient(),
+        indexName: 'test',
+      });
+
+      search.use(createInsightsMiddleware({}));
+
+      expect(mapMiddlewares(search.middleware)).toEqual([
+        {
+          $$type: 'ais.insights',
+          $$internal: false,
+          $$automatic: false,
+        },
+      ]);
+    });
+  });
+
   describe('metadata middleware', () => {
     const defaultUserAgent =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1 Safari/605.1.15';
@@ -449,29 +716,38 @@ See https://www.algolia.com/doc/api-reference/widgets/configure/js/`);
     });
 
     it("doesn't add metadata middleware by default", () => {
-      const useSpy = jest.spyOn(InstantSearch.prototype, 'use');
-
-      // eslint-disable-next-line no-new
-      new InstantSearch({
+      const search = new InstantSearch({
         searchClient: createSearchClient(),
         indexName: 'test',
       });
 
-      expect(useSpy).toHaveBeenCalledTimes(0);
+      expect(
+        search.middleware.map(({ instance: { $$type, $$internal } }) => ({
+          $$type,
+          $$internal,
+        }))
+      ).toEqual([]);
     });
 
     it('adds metadata middleware on the Crawler user agent', () => {
       userAgentMock = algoliaUserAgent;
 
-      const useSpy = jest.spyOn(InstantSearch.prototype, 'use');
-
-      // eslint-disable-next-line no-new
-      new InstantSearch({
+      const search = new InstantSearch({
         searchClient: createSearchClient(),
         indexName: 'test',
       });
 
-      expect(useSpy).toHaveBeenCalledTimes(1);
+      expect(
+        search.middleware.map(({ instance: { $$type, $$internal } }) => ({
+          $$type,
+          $$internal,
+        }))
+      ).toEqual([
+        {
+          $$type: 'ais.metadata',
+          $$internal: true,
+        },
+      ]);
     });
   });
 });
@@ -672,7 +948,34 @@ describe('start', () => {
     search.start();
 
     expect(algoliasearchHelper).toHaveBeenCalledTimes(2);
-    expect(algoliasearchHelper).toHaveBeenCalledWith(searchClient, indexName);
+    expect(algoliasearchHelper).toHaveBeenCalledWith(
+      searchClient,
+      indexName,
+      undefined,
+      { persistHierarchicalRootCount: false }
+    );
+  });
+
+  it('creates a Helper with `persistHierarchicalRootCount` set to true when specified with a future flag', () => {
+    const searchClient = createSearchClient();
+    const indexName = 'indexName';
+    const future = {
+      persistHierarchicalRootCount: true,
+    };
+    const search = new InstantSearch({
+      indexName,
+      searchClient,
+      future,
+    });
+
+    search.start();
+
+    expect(algoliasearchHelper).toHaveBeenCalledWith(
+      searchClient,
+      indexName,
+      undefined,
+      future
+    );
   });
 
   it('schedules a search with widgets', async () => {
@@ -965,6 +1268,32 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/instantsear
 
     expect(instance.mainHelper).toBe(helper);
   });
+
+  it('no query for root if indexName is not given', async () => {
+    const searchClient = createSearchClient();
+    const search = new InstantSearch({
+      searchClient,
+    });
+
+    search.addWidgets([virtualSearchBox({})]);
+    search.start();
+    await wait(0);
+
+    expect(searchClient.search).toHaveBeenCalledTimes(0);
+
+    search.addWidgets([index({ indexName: 'indexName' })]);
+    await wait(0);
+
+    expect(searchClient.search).toHaveBeenCalledTimes(1);
+    expect(searchClient.search).toHaveBeenCalledWith([
+      {
+        indexName: 'indexName',
+        params: {
+          query: '',
+        },
+      },
+    ]);
+  });
 });
 
 describe('dispose', () => {
@@ -1175,6 +1504,15 @@ describe('dispose', () => {
     expect(search.mainHelper).not.toBe(null);
     expect(search.helper).not.toBe(null);
   });
+
+  it("doesn't throw without starting", () => {
+    const search = new InstantSearch({
+      indexName: 'indexName',
+      searchClient: createSearchClient(),
+    });
+
+    expect(() => search.dispose()).not.toThrow();
+  });
 });
 
 describe('scheduleSearch', () => {
@@ -1320,14 +1658,20 @@ describe('scheduleStalledRender', () => {
     await wait(0);
 
     expect(widget.render).toHaveBeenCalledTimes(1);
+    castToJestMock(widget.render!).mockReset();
 
     // Trigger a new search
     search.mainHelper!.search();
 
+    // search starts
+    await wait(0);
+    expect(widget.render).toHaveBeenCalledTimes(1);
+    castToJestMock(widget.render!).mockReset();
+
     // Reaches the delay
     await wait(search._stalledSearchDelay);
 
-    expect(widget.render).toHaveBeenCalledTimes(2);
+    expect(widget.render).toHaveBeenCalledTimes(1);
   });
 
   it('deduplicates the calls to the `render` method', async () => {
@@ -1352,6 +1696,7 @@ describe('scheduleStalledRender', () => {
     await wait(0);
 
     expect(widget.render).toHaveBeenCalledTimes(1);
+    castToJestMock(widget.render!).mockClear();
 
     // Trigger multiple searches
     search.mainHelper!.search();
@@ -1359,10 +1704,17 @@ describe('scheduleStalledRender', () => {
     search.mainHelper!.search();
     search.mainHelper!.search();
 
+    await wait(0);
+
+    // search starts
+    expect(widget.render).toHaveBeenCalledTimes(1);
+    castToJestMock(widget.render!).mockClear();
+
     // Reaches the delay
     await wait(search._stalledSearchDelay);
 
-    expect(widget.render).toHaveBeenCalledTimes(2);
+    expect(widget.render).toHaveBeenCalledTimes(1);
+    castToJestMock(widget.render!).mockClear();
   });
 
   it('triggers a `render` once the search expires the delay', async () => {
@@ -1404,12 +1756,27 @@ describe('scheduleStalledRender', () => {
     search.mainHelper!.search();
 
     expect(widget.render).toHaveBeenCalledTimes(1);
+    castToJestMock(widget.render!).mockClear();
+
+    await wait(0);
+
+    // Widgets render because of the search
+    expect(widget.render).toHaveBeenCalledTimes(1);
+    expect(widget.render).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        searchMetadata: {
+          isSearchStalled: false,
+        },
+        status: 'loading',
+      })
+    );
+    castToJestMock(widget.render!).mockClear();
 
     // The delay is reached
     await wait(search._stalledSearchDelay);
 
     // Widgets render because of the stalled search
-    expect(widget.render).toHaveBeenCalledTimes(2);
+    expect(widget.render).toHaveBeenCalledTimes(1);
     expect(widget.render).toHaveBeenLastCalledWith(
       expect.objectContaining({
         searchMetadata: {
@@ -1418,6 +1785,7 @@ describe('scheduleStalledRender', () => {
         status: 'stalled',
       })
     );
+    castToJestMock(widget.render!).mockClear();
 
     // Resolve the `search`
     searches[1].resolver();
@@ -1426,7 +1794,7 @@ describe('scheduleStalledRender', () => {
     await wait(0);
 
     // Widgets render because of the results
-    expect(widget.render).toHaveBeenCalledTimes(3);
+    expect(widget.render).toHaveBeenCalledTimes(1);
     expect(widget.render).toHaveBeenLastCalledWith(
       expect.objectContaining({
         searchMetadata: {
@@ -2637,7 +3005,7 @@ describe('onStateChange', () => {
 
     const searchBox = connectSearchBox<{
       queryTriggered: string;
-      buttonRef: preact.RefObject<any>;
+      buttonRef: RefObject<any>;
       container: HTMLElement;
     }>(({ refine, query, widgetParams }) => {
       render(
@@ -2742,9 +3110,11 @@ describe('onStateChange', () => {
 describe('initialUiState', () => {
   it('warns if UI state contains unmounted widgets in development mode', async () => {
     const searchClient = createSearchClient();
-    const search = new InstantSearch<
-      UiState & { [indexName: string]: { customWidget?: { query: string } } }
-    >({
+    const search = new InstantSearch<{
+      [indexName in string]: UiState[indexName] & {
+        customWidget?: { query: string };
+      };
+    }>({
       indexName: 'indexName',
       searchClient,
       initialUiState: {

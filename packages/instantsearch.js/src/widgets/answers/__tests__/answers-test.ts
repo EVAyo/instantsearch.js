@@ -3,14 +3,15 @@
  */
 /** @jsx h */
 
-import algoliasearchHelper from 'algoliasearch-helper';
-import { fireEvent } from '@testing-library/preact';
-import instantsearch from '../../../index.es';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
+import { createSearchClient } from '@instantsearch/mocks';
 import { wait } from '@instantsearch/testutils/wait';
-import answers from '../answers';
-import searchBox from '../../search-box/search-box';
+import { fireEvent } from '@testing-library/preact';
+import algoliasearchHelper from 'algoliasearch-helper';
+
 import { createInitOptions } from '../../../../test/createWidget';
+import instantsearch from '../../../index.es';
+import searchBox from '../../search-box/search-box';
+import answers from '../answers';
 
 describe('answers', () => {
   describe('Usage', () => {
@@ -95,9 +96,14 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/answers/js/
       ]);
       search.start();
       await wait(0);
-      expect(container.innerHTML).toMatchInlineSnapshot(
-        `"<div class=\\"ais-Answers ais-Answers--empty\\"><div class=\\"ais-Answers-header\\"></div><ul class=\\"ais-Answers-list\\"></ul></div>"`
-      );
+      expect(container.innerHTML).toMatchInlineSnapshot(`
+        <div class="ais-Answers ais-Answers--empty">
+          <div class="ais-Answers-header">
+          </div>
+          <ul class="ais-Answers-list">
+          </ul>
+        </div>
+      `);
     });
 
     it('renders the answers', async () => {

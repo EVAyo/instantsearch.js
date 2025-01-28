@@ -1,15 +1,24 @@
-import type { PlainSearchParameters } from 'algoliasearch-helper';
 import { isEqual, safelyRunOnBrowser } from '../utils';
+
 import type { InfiniteHitsCache } from '../../connectors/infinite-hits/connectInfiniteHits';
+import type { PlainSearchParameters } from 'algoliasearch-helper';
 
 function getStateWithoutPage(state: PlainSearchParameters) {
   const { page, ...rest } = state || {};
   return rest;
 }
 
-const KEY = 'ais.infiniteHits';
+export default function createInfiniteHitsSessionStorageCache({
+  key,
+}: {
+  /**
+   * If you display multiple instances of infiniteHits on the same page,
+   * you must provide a unique key for each instance.
+   */
+  key?: string;
+} = {}): InfiniteHitsCache {
+  const KEY = ['ais.infiniteHits', key].filter(Boolean).join(':');
 
-export default function createInfiniteHitsSessionStorageCache(): InfiniteHitsCache {
   return {
     read({ state }) {
       const sessionStorage = safelyRunOnBrowser<Storage | undefined>(

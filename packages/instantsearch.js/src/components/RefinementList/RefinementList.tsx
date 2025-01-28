@@ -1,22 +1,25 @@
 /** @jsx h */
 
-import type { JSX } from 'preact';
+import { cx } from 'instantsearch-ui-components';
 import { h, createRef, Component } from 'preact';
-import { cx } from '@algolia/ui-components-shared';
+
 import { isSpecialClick, isEqual } from '../../lib/utils';
-import type { PreparedTemplateProps } from '../../lib/templating';
+import SearchBox from '../SearchBox/SearchBox';
 import Template from '../Template/Template';
+
 import RefinementListItem from './RefinementListItem';
+
+import type { HierarchicalMenuItem } from '../../connectors/hierarchical-menu/connectHierarchicalMenu';
+import type { PreparedTemplateProps } from '../../lib/templating';
+import type { ComponentCSSClasses, CreateURL, Templates } from '../../types';
+import type { HierarchicalMenuComponentCSSClasses } from '../../widgets/hierarchical-menu/hierarchical-menu';
+import type { RatingMenuComponentCSSClasses } from '../../widgets/rating-menu/rating-menu';
+import type { RefinementListOwnCSSClasses } from '../../widgets/refinement-list/refinement-list';
 import type {
   SearchBoxComponentCSSClasses,
   SearchBoxComponentTemplates,
 } from '../SearchBox/SearchBox';
-import SearchBox from '../SearchBox/SearchBox';
-import type { HierarchicalMenuItem } from '../../connectors/hierarchical-menu/connectHierarchicalMenu';
-import type { ComponentCSSClasses, CreateURL, Templates } from '../../types';
-import type { RefinementListOwnCSSClasses } from '../../widgets/refinement-list/refinement-list';
-import type { RatingMenuComponentCSSClasses } from '../../widgets/rating-menu/rating-menu';
-import type { HierarchicalMenuComponentCSSClasses } from '../../widgets/hierarchical-menu/hierarchical-menu';
+import type { JSX } from 'preact';
 
 // CSS types
 type RefinementListOptionalClasses =
@@ -105,12 +108,10 @@ class RefinementList<TTemplates extends Templates> extends Component<
 > {
   public static defaultProps = defaultProps;
 
+  private listRef = createRef<HTMLUListElement>();
   private searchBox = createRef<SearchBox>();
 
-  public constructor(props: RefinementListPropsWithDefaultProps<TTemplates>) {
-    super(props);
-    this.handleItemClick = this.handleItemClick.bind(this);
-  }
+  private lastRefinedValue: string | undefined = undefined;
 
   public shouldComponentUpdate(
     nextProps: RefinementListPropsWithDefaultProps<TTemplates>
@@ -124,10 +125,11 @@ class RefinementList<TTemplates extends Templates> extends Component<
   }
 
   private refine(facetValueToRefine: string) {
+    this.lastRefinedValue = facetValueToRefine;
     this.props.toggleRefinement(facetValueToRefine);
   }
 
-  private _generateFacetItem(facetValue: FacetValue) {
+  private _generateFacetItem = (facetValue: FacetValue) => {
     let subItems;
     if (
       isHierarchicalMenuItem(facetValue) &&
@@ -192,7 +194,7 @@ class RefinementList<TTemplates extends Templates> extends Component<
         templateProps={this.props.templateProps}
       />
     );
-  }
+  };
 
   // Click events on DOM tree like LABEL > INPUT will result in two click events
   // instead of one.
@@ -209,7 +211,7 @@ class RefinementList<TTemplates extends Templates> extends Component<
   //
   // Finally, we always stop propagation of the event to avoid multiple levels RefinementLists to fail: click
   // on child would click on parent also
-  private handleItemClick({
+  private handleItemClick = ({
     facetValueToRefine,
     isRefined,
     originalEvent,
@@ -217,36 +219,31 @@ class RefinementList<TTemplates extends Templates> extends Component<
     facetValueToRefine: string;
     isRefined: boolean;
     originalEvent: MouseEvent;
-  }) {
+  }) => {
     if (isSpecialClick(originalEvent)) {
       // do not alter the default browser behavior
       // if one special key is down
       return;
     }
 
-    if (
-      !(originalEvent.target instanceof HTMLElement) ||
-      !(originalEvent.target.parentNode instanceof HTMLElement)
-    ) {
+    let parent = originalEvent.target as HTMLElement | null;
+
+    if (parent === null || parent.parentNode === null) {
       return;
     }
 
     if (
       isRefined &&
-      originalEvent.target.parentNode.querySelector(
-        'input[type="radio"]:checked'
-      )
+      parent.parentNode.querySelector('input[type="radio"]:checked')
     ) {
       // Prevent refinement for being reset if the user clicks on an already checked radio button
       return;
     }
 
-    if (originalEvent.target.tagName === 'INPUT') {
+    if (parent.tagName === 'INPUT') {
       this.refine(facetValueToRefine);
       return;
     }
-
-    let parent = originalEvent.target;
 
     while (parent !== originalEvent.currentTarget) {
       if (
@@ -267,7 +264,7 @@ class RefinementList<TTemplates extends Templates> extends Component<
     originalEvent.stopPropagation();
 
     this.refine(facetValueToRefine);
-  }
+  };
 
   public componentWillReceiveProps(
     nextProps: RefinementListPropsWithDefaultProps<TTemplates>
@@ -275,6 +272,20 @@ class RefinementList<TTemplates extends Templates> extends Component<
     if (this.searchBox.current && !nextProps.isFromSearch) {
       this.searchBox.current.resetInput();
     }
+  }
+
+  /**
+   * This sets focus on the last refined input element after a render
+   * because Preact does not perform it automatically.
+   * @see https://github.com/preactjs/preact/issues/3242
+   */
+  public componentDidUpdate() {
+    this.listRef.current
+      ?.querySelector<HTMLInputElement>(
+        `input[value="${this.lastRefinedValue?.replace('"', '\\"')}"]`
+      )
+      ?.focus();
+    this.lastRefinedValue = undefined;
   }
 
   private refineFirstValue() {
@@ -330,13 +341,14 @@ class RefinementList<TTemplates extends Templates> extends Component<
           // This sets the search box to a controlled state because
           // we don't rely on the `refine` prop but on `onChange`.
           searchAsYouType={false}
+          ariaLabel="Search for filters"
         />
       </div>
     );
 
     const facetValues = this.props.facetValues &&
       this.props.facetValues.length > 0 && (
-        <ul className={this.props.cssClasses.list}>
+        <ul ref={this.listRef} className={this.props.cssClasses.list}>
           {this.props.facetValues.map(this._generateFacetItem, this)}
         </ul>
       );

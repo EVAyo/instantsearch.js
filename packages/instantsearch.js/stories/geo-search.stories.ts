@@ -1,9 +1,9 @@
-import { storiesOf } from '@storybook/html';
 import { action } from '@storybook/addon-actions';
+import { storiesOf } from '@storybook/html';
+import injectScript from 'scriptjs';
+
 import { withHits, withLifecycle } from '../.storybook/decorators';
 import createInfoBox from '../.storybook/utils/create-info-box';
-import algoliaPlaces from 'places.js';
-import injectScript from 'scriptjs';
 
 const API_KEY = 'AIzaSyBawL8VbstJDdU5397SUX7pEt9DslAwWgQ';
 
@@ -94,40 +94,6 @@ stories
       })
     )
   );
-
-// With Places
-stories.add(
-  'with position from Places',
-  withHitsAndConfigure(({ search, container, instantsearch }) =>
-    injectGoogleMaps(() => {
-      const placesElement = document.createElement('input');
-      const mapElement = document.createElement('div');
-      mapElement.style.marginTop = '20px';
-
-      container.appendChild(placesElement);
-      container.appendChild(mapElement);
-
-      search.addWidgets([
-        instantsearch.widgets.configure({
-          aroundRadius: 20000,
-        }),
-
-        instantsearch.widgets.places({
-          placesReference: algoliaPlaces,
-          container: placesElement,
-          defaultPosition: ['37.7793', '-122.419'],
-        }),
-
-        instantsearch.widgets.geoSearch({
-          googleReference: window.google,
-          container: mapElement,
-          enableClearMapRefinement: false,
-          initialZoom,
-        }),
-      ]);
-    })
-  )
-);
 
 // Only UI
 stories
@@ -223,9 +189,10 @@ stories
           instantsearch.widgets.geoSearch({
             googleReference: window.google,
             templates: {
-              reset: '<span>re-center</span>',
-              toggle: '<span>Redo search when map moved</span>',
-              redo: '<span>Search this area</span>',
+              reset: (_, { html }) => html`<span>re-center</span>`,
+              toggle: (_, { html }) =>
+                html`<span>Redo search when map moved</span>`,
+              redo: (_, { html }) => html`<span>Search this area</span>`,
             },
             container,
             initialPosition,
@@ -381,11 +348,10 @@ stories
               },
             },
             templates: {
-              HTMLMarker: `
-                <div class="my-custom-marker">
-                  {{price_formatted}}
-                </div>
-              `,
+              HTMLMarker: (hit, { html }) =>
+                html`<div class="my-custom-marker">
+                  ${hit.price_formatted}
+                </div>`,
             },
             container,
             initialPosition,
@@ -427,11 +393,10 @@ stories
               },
             },
             templates: {
-              HTMLMarker: `
-                <div class="my-custom-marker">
-                  {{price_formatted}}
-                </div>
-              `,
+              HTMLMarker: (hit, { html }) =>
+                html`<div class="my-custom-marker">
+                  ${hit.price_formatted}
+                </div>`,
             },
             container,
             initialPosition,
@@ -486,11 +451,10 @@ stories
               },
             },
             templates: {
-              HTMLMarker: `
-                <div class="my-custom-marker">
-                  {{price_formatted}}
-                </div>
-              `,
+              HTMLMarker: (hit, { html }) =>
+                html`<div class="my-custom-marker">
+                  ${hit.price_formatted}
+                </div>`,
             },
             container,
             initialPosition,
@@ -566,11 +530,12 @@ stories
               },
             },
             templates: {
-              HTMLMarker: `
-                <div class="my-custom-marker" data-id="{{objectID}}">
-                  {{price_formatted}}
-                </div>
-              `,
+              HTMLMarker: (hit, { html }) => html`<div
+                class="my-custom-marker"
+                data-id="{{objectID}}"
+              >
+                ${hit.price_formatted}
+              </div>`,
             },
             container,
             initialPosition,

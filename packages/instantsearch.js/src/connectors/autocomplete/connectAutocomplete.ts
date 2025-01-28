@@ -1,5 +1,3 @@
-import type { SearchResults } from 'algoliasearch-helper';
-import type { SendEventForHits } from '../../lib/utils';
 import {
   escapeHits,
   TAG_PLACEHOLDER,
@@ -9,7 +7,10 @@ import {
   noop,
   warning,
 } from '../../lib/utils';
+
+import type { SendEventForHits } from '../../lib/utils';
 import type { Hit, Connector, WidgetRenderState } from '../../types';
+import type { SearchResults } from 'algoliasearch-helper';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'autocomplete',
@@ -39,6 +40,11 @@ export type AutocompleteRenderState = {
      * The name of the index
      */
     indexName: string;
+
+    /**
+     * The id of the index
+     */
+    indexId: string;
 
     /**
      * The resolved hits from the index matching the query.
@@ -86,7 +92,10 @@ const connectAutocomplete: AutocompleteConnector = function connectAutocomplete(
   checkRendering(renderFn, withUsage());
 
   return (widgetParams) => {
-    const { escapeHTML = true } = widgetParams || {};
+    const {
+      // @MAJOR: this can default to false
+      escapeHTML = true,
+    } = widgetParams || {};
 
     warning(
       !(widgetParams as any).indices,
@@ -114,7 +123,7 @@ search.addWidgets([
     );
 
     type ConnectorState = {
-      refine?(query: string): void;
+      refine?: (query: string) => void;
     };
 
     const connectorState: ConnectorState = {};
@@ -140,7 +149,7 @@ search.addWidgets([
         const renderState = this.getWidgetRenderState(renderOptions);
 
         renderState.indices.forEach(({ sendEvent, hits }) => {
-          sendEvent('view', hits);
+          sendEvent('view:internal', hits);
         });
 
         renderFn(
@@ -174,21 +183,23 @@ search.addWidgets([
         const indices = scopedResults.map((scopedResult) => {
           // We need to escape the hits because highlighting
           // exposes HTML tags to the end-user.
-          scopedResult.results.hits = escapeHTML
-            ? escapeHits(scopedResult.results.hits)
-            : scopedResult.results.hits;
+          if (scopedResult.results) {
+            scopedResult.results.hits = escapeHTML
+              ? escapeHits(scopedResult.results.hits)
+              : scopedResult.results.hits;
+          }
 
           const sendEvent = createSendEventForHits({
             instantSearchInstance,
-            index: scopedResult.results.index,
+            getIndex: () => scopedResult.results?.index || '',
             widgetType: this.$$type,
           });
 
           return {
             indexId: scopedResult.indexId,
-            indexName: scopedResult.results.index,
-            hits: scopedResult.results.hits,
-            results: scopedResult.results,
+            indexName: scopedResult.results?.index || '',
+            hits: scopedResult.results?.hits || [],
+            results: scopedResult.results || ({} as unknown as SearchResults),
             sendEvent,
           };
         });

@@ -1,4 +1,8 @@
+import { createMultiSearchResponse } from '@instantsearch/mocks';
 import algoliasearchHelper from 'algoliasearch-helper';
+
+import { createInstantSearch } from './createInstantSearch';
+
 import type {
   InitOptions,
   RenderOptions,
@@ -6,8 +10,7 @@ import type {
   Widget,
 } from '../src/types';
 import type { IndexInitOptions } from '../src/widgets/index/index';
-import { createMultiSearchResponse } from '@instantsearch/mocks/createAPIResponse';
-import { createInstantSearch } from './createInstantSearch';
+import type { SearchResponse } from 'algoliasearch-helper/types/algoliasearch';
 
 export const createInitOptions = (
   args: Partial<InitOptions> = {}
@@ -55,7 +58,7 @@ export const createRenderOptions = (
   const helper = args.helper || instantSearchInstance.helper!;
   const results = new algoliasearchHelper.SearchResults(
     instantSearchInstance.helper!.state,
-    response.results
+    response.results as Array<SearchResponse<any>>
   );
 
   return {
@@ -92,18 +95,17 @@ export const createDisposeOptions = (
   return {
     helper,
     state: helper.state,
+    recommendState: helper.recommendState,
     parent: instantSearchInstance.mainIndex,
     ...args,
   };
 };
 
-export const createWidget = <TWidget extends Widget>(
-  args: Partial<TWidget> = {}
-): TWidget =>
+export const createWidget = (args: Partial<Widget> = {}): Widget =>
   ({
     $$type: 'mock.widget',
     init: jest.fn(),
     render: jest.fn(),
     dispose: jest.fn(),
     ...args,
-  } as unknown as TWidget);
+  } as unknown as Widget);

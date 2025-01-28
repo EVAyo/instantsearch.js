@@ -3,18 +3,23 @@
  */
 
 import {
+  createMultiSearchResponse,
+  createSearchClient,
+} from '@instantsearch/mocks';
+import { wait } from '@instantsearch/testutils/wait';
+import { widgetSnapshotSerializer } from '@instantsearch/testutils/widgetSnapshotSerializer';
+import { SearchParameters, SearchResults } from 'algoliasearch-helper';
+
+import { index, searchBox, menu, dynamicWidgets } from '../..';
+import instantsearch from '../../..';
+import { createInstantSearch } from '../../../../test/createInstantSearch';
+import {
   createInitOptions,
   createRenderOptions,
 } from '../../../../test/createWidget';
-import { index, searchBox, menu, dynamicWidgets } from '../..';
-import { createInstantSearch } from '../../../../test/createInstantSearch';
-import { SearchParameters, SearchResults } from 'algoliasearch-helper';
-import { createMultiSearchResponse } from '@instantsearch/mocks/createAPIResponse';
-import { wait } from '@instantsearch/testutils/wait';
-import { widgetSnapshotSerializer } from '@instantsearch/testutils/widgetSnapshotSerializer';
 import refinementList from '../../refinement-list/refinement-list';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import instantsearch from '../../..';
+
+import type { SearchResponse } from '../../../types/algoliasearch';
 
 expect.addSnapshotSerializer(widgetSnapshotSerializer);
 
@@ -185,7 +190,7 @@ describe('dynamicWidgets()', () => {
           indexWidget.getWidgetSearchParameters(new SearchParameters(), {
             uiState: {},
           }),
-          createMultiSearchResponse({}).results
+          createMultiSearchResponse({}).results as Array<SearchResponse<any>>
         );
 
       indexWidget.render(createRenderOptions({ instantSearchInstance }));
@@ -216,7 +221,7 @@ describe('dynamicWidgets()', () => {
 
     it('renders the widgets returned by transformItems', async () => {
       const instantSearchInstance = instantsearch({
-        indexName: '',
+        indexName: 'indexName',
         searchClient: createSearchClient(),
       });
       const rootContainer = document.createElement('div');
@@ -288,7 +293,7 @@ describe('dynamicWidgets()', () => {
 
     it('updates the position of widgets returned by transformItems', async () => {
       const instantSearchInstance = instantsearch({
-        indexName: '',
+        indexName: 'indexName',
         searchClient: createSearchClient(),
       });
       instantSearchInstance.start();
@@ -452,7 +457,7 @@ describe('dynamicWidgets()', () => {
           }),
           createMultiSearchResponse({
             userData: [{ MOCK_facetOrder: ['test1', 'test4', 'test5'] }],
-          }).results
+          }).results as Array<SearchResponse<any>>
         );
 
       indexWidget.render(createRenderOptions({ instantSearchInstance }));
@@ -488,7 +493,7 @@ describe('dynamicWidgets()', () => {
 
     it('removes dom on dispose', async () => {
       const instantSearchInstance = instantsearch({
-        indexName: '',
+        indexName: 'indexName',
         searchClient: createSearchClient(),
       });
       instantSearchInstance.start();

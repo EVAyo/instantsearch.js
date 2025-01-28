@@ -1,11 +1,13 @@
+import { castToJestMock } from '@instantsearch/testutils/castToJestMock';
 import algoliasearchHelper from 'algoliasearch-helper';
-import { createSendEventForFacet } from '../createSendEventForFacet';
-import type { SearchClient } from '../../../types';
+
 import { createInstantSearch } from '../../../../test/createInstantSearch';
+import { createSendEventForFacet } from '../createSendEventForFacet';
+import { isFacetRefined } from '../isFacetRefined';
+
+import type { SearchClient } from '../../../types';
 
 jest.mock('../isFacetRefined', () => ({ isFacetRefined: jest.fn() }));
-import { isFacetRefined } from '../isFacetRefined';
-import { castToJestMock } from '@instantsearch/testutils/castToJestMock';
 
 const createTestEnvironment = () => {
   const instantSearchInstance = createInstantSearch();
@@ -32,8 +34,8 @@ describe('createSendEventForFacet', () => {
       expect(() => {
         sendEvent('click');
       }).toThrowErrorMatchingInlineSnapshot(`
-"You need to pass two arguments like:
-  sendEvent('click', facetValue);
+"You need to pass between two and four arguments like:
+  sendEvent('click', facetValue, eventName?, additionalData?);
 
 If you want to send a custom payload, you can pass one object: sendEvent(customPayload);
 "
@@ -45,8 +47,8 @@ If you want to send a custom payload, you can pass one object: sendEvent(customP
       expect(() => {
         sendEvent('my custom event type');
       }).toThrowErrorMatchingInlineSnapshot(`
-"You need to pass two arguments like:
-  sendEvent('click', facetValue);
+"You need to pass between two and four arguments like:
+  sendEvent('click', facetValue, eventName?, additionalData?);
 
 If you want to send a custom payload, you can pass one object: sendEvent(customPayload);
 "
@@ -58,8 +60,8 @@ If you want to send a custom payload, you can pass one object: sendEvent(customP
       expect(() => {
         sendEvent('custom event type');
       }).toThrowErrorMatchingInlineSnapshot(`
-"You need to pass two arguments like:
-  sendEvent('click', facetValue);
+"You need to pass between two and four arguments like:
+  sendEvent('click', facetValue, eventName?, additionalData?);
 
 If you want to send a custom payload, you can pass one object: sendEvent(customPayload);
 "
@@ -94,6 +96,26 @@ If you want to send a custom payload, you can pass one object: sendEvent(customP
       });
     });
 
+    it('sends with internal eventName', () => {
+      const { sendEvent, instantSearchInstance } = createTestEnvironment();
+      sendEvent('click:internal', 'value');
+      expect(instantSearchInstance.sendEventToInsights).toHaveBeenCalledTimes(
+        1
+      );
+      expect(instantSearchInstance.sendEventToInsights).toHaveBeenCalledWith({
+        attribute: 'category',
+        eventType: 'click',
+        eventModifier: 'internal',
+        insightsMethod: 'clickedFilters',
+        payload: {
+          eventName: 'Filter Applied',
+          filters: ['category:value'],
+          index: '',
+        },
+        widgetType: 'ais.customWidget',
+      });
+    });
+
     it('sends with custom eventName', () => {
       const { sendEvent, instantSearchInstance } = createTestEnvironment();
       sendEvent('click', 'value', 'Category Clicked');
@@ -108,6 +130,31 @@ If you want to send a custom payload, you can pass one object: sendEvent(customP
           eventName: 'Category Clicked',
           filters: ['category:value'],
           index: '',
+        },
+        widgetType: 'ais.customWidget',
+      });
+    });
+
+    it('sends with additional data', () => {
+      const { sendEvent, instantSearchInstance } = createTestEnvironment();
+      const additionalData = {
+        customData: 'customValue',
+        customData2: true,
+      };
+
+      sendEvent('click', 'value', 'Category Clicked', additionalData);
+      expect(instantSearchInstance.sendEventToInsights).toHaveBeenCalledTimes(
+        1
+      );
+      expect(instantSearchInstance.sendEventToInsights).toHaveBeenCalledWith({
+        attribute: 'category',
+        eventType: 'click',
+        insightsMethod: 'clickedFilters',
+        payload: {
+          eventName: 'Category Clicked',
+          filters: ['category:value'],
+          index: '',
+          ...additionalData,
         },
         widgetType: 'ais.customWidget',
       });

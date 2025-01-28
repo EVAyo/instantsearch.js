@@ -1,27 +1,31 @@
 /** @jsx h */
 
+import { cx } from 'instantsearch-ui-components';
 import { h, render } from 'preact';
-import { cx } from '@algolia/ui-components-shared';
-import type { WidgetFactory, Template, Hit, Renderer } from '../../types';
-import defaultTemplates from './defaultTemplates';
+
+import Answers from '../../components/Answers/Answers';
+import connectAnswers from '../../connectors/answers/connectAnswers';
+import { component } from '../../lib/suit';
+import { prepareTemplateProps } from '../../lib/templating';
 import {
   createDocumentationMessageGenerator,
+  deprecate,
   getContainerNode,
 } from '../../lib/utils';
-import { prepareTemplateProps } from '../../lib/templating';
-import { component } from '../../lib/suit';
+
+import defaultTemplates from './defaultTemplates';
+
 import type {
   AnswersComponentCSSClasses,
   AnswersComponentTemplates,
 } from '../../components/Answers/Answers';
-import Answers from '../../components/Answers/Answers';
 import type {
   AnswersRenderState,
   AnswersConnectorParams,
   AnswersWidgetDescription,
 } from '../../connectors/answers/connectAnswers';
-import connectAnswers from '../../connectors/answers/connectAnswers';
 import type { PreparedTemplateProps } from '../../lib/templating';
+import type { WidgetFactory, Template, Hit, Renderer } from '../../types';
 
 const withUsage = createDocumentationMessageGenerator({ name: 'answers' });
 const suit = component('Answers');
@@ -136,6 +140,9 @@ export type AnswersWidget = WidgetFactory<
   AnswersWidgetParams
 >;
 
+/**
+ * @deprecated the answers service is no longer offered, and this widget will be removed in InstantSearch.js v5
+ */
 const answersWidget: AnswersWidget = (widgetParams) => {
   const {
     container,
@@ -189,4 +196,7 @@ const answersWidget: AnswersWidget = (widgetParams) => {
   };
 };
 
-export default answersWidget;
+export default deprecate(
+  answersWidget,
+  'The answers widget is deprecated and will be removed in InstantSearch.js 5.0'
+);

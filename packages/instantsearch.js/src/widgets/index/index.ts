@@ -1,21 +1,5 @@
-import type {
-  AlgoliaSearchHelper as Helper,
-  DerivedHelper,
-  PlainSearchParameters,
-  SearchParameters,
-  SearchResults,
-  AlgoliaSearchHelper,
-} from 'algoliasearch-helper';
 import algoliasearchHelper from 'algoliasearch-helper';
-import type {
-  InstantSearch,
-  UiState,
-  IndexUiState,
-  Widget,
-  ScopedResult,
-  SearchClient,
-  IndexRenderState,
-} from '../../types';
+
 import {
   checkIndexUiState,
   createDocumentationMessageGenerator,
@@ -26,6 +10,28 @@ import {
   createInitArgs,
   createRenderArgs,
 } from '../../lib/utils';
+import { addWidgetId } from '../../lib/utils/addWidgetId';
+
+import type {
+  InstantSearch,
+  UiState,
+  IndexUiState,
+  Widget,
+  ScopedResult,
+  SearchClient,
+  IndexRenderState,
+  RenderOptions,
+  RecommendResponse,
+} from '../../types';
+import type {
+  AlgoliaSearchHelper as Helper,
+  DerivedHelper,
+  PlainSearchParameters,
+  SearchParameters,
+  SearchResults,
+  AlgoliaSearchHelper,
+  RecommendParameters,
+} from 'algoliasearch-helper';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'index-widget',
@@ -52,43 +58,66 @@ type WidgetSearchParametersOptions = Parameters<
 type LocalWidgetSearchParametersOptions = WidgetSearchParametersOptions & {
   initialSearchParameters: SearchParameters;
 };
+type LocalWidgetRecommendParametersOptions = WidgetSearchParametersOptions & {
+  initialRecommendParameters: RecommendParameters;
+};
 
 export type IndexWidgetDescription = {
   $$type: 'ais.index';
   $$widgetType: 'ais.index';
 };
 
-export type IndexWidget = Omit<
+export type IndexWidget<TUiState extends UiState = UiState> = Omit<
   Widget<IndexWidgetDescription & { widgetParams: IndexWidgetParams }>,
   'getWidgetUiState' | 'getWidgetState'
 > & {
-  getIndexName(): string;
-  getIndexId(): string;
-  getHelper(): Helper | null;
-  getResults(): SearchResults | null;
-  getScopedResults(): ScopedResult[];
-  getParent(): IndexWidget | null;
-  getWidgets(): Array<Widget | IndexWidget>;
-  createURL(state: SearchParameters): string;
+  getIndexName: () => string;
+  getIndexId: () => string;
+  getHelper: () => Helper | null;
+  getResults: () => SearchResults | null;
+  getResultsForWidget: (
+    widget: IndexWidget | Widget
+  ) => SearchResults | RecommendResponse<any> | null;
+  getPreviousState: () => SearchParameters | null;
+  getScopedResults: () => ScopedResult[];
+  getParent: () => IndexWidget | null;
+  getWidgets: () => Array<Widget | IndexWidget>;
+  createURL: (
+    nextState: SearchParameters | ((state: IndexUiState) => IndexUiState)
+  ) => string;
 
-  addWidgets(widgets: Array<Widget | IndexWidget>): IndexWidget;
-  removeWidgets(widgets: Array<Widget | IndexWidget>): IndexWidget;
+  addWidgets: (widgets: Array<Widget | IndexWidget>) => IndexWidget;
+  removeWidgets: (widgets: Array<Widget | IndexWidget>) => IndexWidget;
 
-  init(options: IndexInitOptions): void;
-  render(options: IndexRenderOptions): void;
-  dispose(): void;
+  init: (options: IndexInitOptions) => void;
+  render: (options: IndexRenderOptions) => void;
+  dispose: () => void;
   /**
    * @deprecated
    */
-  getWidgetState(uiState: UiState): UiState;
-  getWidgetUiState<TUiState extends UiState = UiState>(
-    uiState: TUiState
-  ): TUiState;
-  getWidgetSearchParameters(
+  getWidgetState: (uiState: UiState) => UiState;
+  getWidgetUiState: <TSpecificUiState extends UiState = TUiState>(
+    uiState: TSpecificUiState
+  ) => TSpecificUiState;
+  getWidgetSearchParameters: (
     searchParameters: SearchParameters,
     searchParametersOptions: { uiState: IndexUiState }
-  ): SearchParameters;
-  refreshUiState(): void;
+  ) => SearchParameters;
+  /**
+   * Set this index' UI state back to the state defined by the widgets.
+   * Can only be called after `init`.
+   */
+  refreshUiState: () => void;
+  /**
+   * Set this index' UI state and search. This is the equivalent of calling
+   * a spread `setUiState` on the InstantSearch instance.
+   * Can only be called after `init`.
+   */
+  setIndexUiState: (
+    indexUiState:
+      | TUiState[string]
+      | ((previousIndexUiState: TUiState[string]) => TUiState[string])
+  ) => void;
 };
 
 /**
@@ -100,10 +129,12 @@ function privateHelperSetState(
   helper: AlgoliaSearchHelper,
   {
     state,
+    recommendState,
     isPageReset,
     _uiState,
   }: {
     state: SearchParameters;
+    recommendState: RecommendParameters;
     isPageReset?: boolean;
     _uiState?: IndexUiState;
   }
@@ -117,6 +148,13 @@ function privateHelperSetState(
       isPageReset,
       _uiState,
     });
+  }
+
+  if (recommendState !== helper.recommendState) {
+    helper.recommendState = recommendState;
+
+    // eslint-disable-next-line no-warning-comments
+    // TODO: emit "change" event when events for Recommend are implemented
   }
 }
 
@@ -152,15 +190,36 @@ function getLocalWidgetsSearchParameters(
 ): SearchParameters {
   const { initialSearchParameters, ...rest } = widgetSearchParametersOptions;
 
-  return widgets
-    .filter((widget) => !isIndexWidget(widget))
-    .reduce<SearchParameters>((state, widget) => {
-      if (!widget.getWidgetSearchParameters) {
-        return state;
-      }
+  return widgets.reduce<SearchParameters>((state, widget) => {
+    if (!widget.getWidgetSearchParameters || isIndexWidget(widget)) {
+      return state;
+    }
 
-      return widget.getWidgetSearchParameters(state, rest);
-    }, initialSearchParameters);
+    if (widget.dependsOn === 'search' && widget.getWidgetParameters) {
+      return widget.getWidgetParameters(state, rest);
+    }
+
+    return widget.getWidgetSearchParameters(state, rest);
+  }, initialSearchParameters);
+}
+
+function getLocalWidgetsRecommendParameters(
+  widgets: Array<Widget | IndexWidget>,
+  widgetRecommendParametersOptions: LocalWidgetRecommendParametersOptions
+): RecommendParameters {
+  const { initialRecommendParameters, ...rest } =
+    widgetRecommendParametersOptions;
+
+  return widgets.reduce((state, widget) => {
+    if (
+      !isIndexWidget(widget) &&
+      widget.dependsOn === 'recommend' &&
+      widget.getWidgetParameters
+    ) {
+      return widget.getWidgetParameters(state, rest);
+    }
+    return state;
+  }, initialRecommendParameters);
 }
 
 function resetPageFromWidgets(widgets: Array<Widget | IndexWidget>): void {
@@ -175,6 +234,7 @@ function resetPageFromWidgets(widgets: Array<Widget | IndexWidget>): void {
 
     privateHelperSetState(widgetHelper, {
       state: widgetHelper.state.resetPage(),
+      recommendState: widgetHelper.recommendState,
       isPageReset: true,
     });
 
@@ -212,6 +272,9 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
   let localParent: IndexWidget | null = null;
   let helper: Helper | null = null;
   let derivedHelper: DerivedHelper | null = null;
+  let lastValidSearchParameters: SearchParameters | null = null;
+  let hasRecommendWidget: boolean = false;
+  let hasSearchWidget: boolean = false;
 
   return {
     $$type: 'ais.index',
@@ -230,14 +293,53 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
     },
 
     getResults() {
-      return derivedHelper && derivedHelper.lastResults;
+      if (!derivedHelper?.lastResults) return null;
+
+      // To make the UI optimistic, we patch the state to display to the current
+      // one instead of the one associated with the latest results.
+      // This means user-driven UI changes (e.g., checked checkbox) are reflected
+      // immediately instead of waiting for Algolia to respond, regardless of
+      // the status of the network request.
+      derivedHelper.lastResults._state = helper!.state;
+
+      return derivedHelper.lastResults;
+    },
+
+    getResultsForWidget(widget) {
+      if (
+        widget.dependsOn !== 'recommend' ||
+        isIndexWidget(widget) ||
+        widget.$$id === undefined
+      ) {
+        return this.getResults();
+      }
+
+      if (!helper?.lastRecommendResults) {
+        return null;
+      }
+
+      return helper.lastRecommendResults[widget.$$id];
+    },
+
+    getPreviousState() {
+      return lastValidSearchParameters;
     },
 
     getScopedResults() {
       const widgetParent = this.getParent();
+      let widgetSiblings;
 
-      // If the widget is the root, we consider itself as the only sibling.
-      const widgetSiblings = widgetParent ? widgetParent.getWidgets() : [this];
+      if (widgetParent) {
+        widgetSiblings = widgetParent.getWidgets();
+      } else if (indexName.length === 0) {
+        // The widget is the root but has no index name:
+        // we resolve results from its children index widgets
+        widgetSiblings = this.getWidgets();
+      } else {
+        // The widget is the root and has an index name:
+        // we consider itself as the only sibling
+        widgetSiblings = [this];
+      }
 
       return resolveScopedResultsFromWidgets(widgetSiblings);
     },
@@ -246,7 +348,14 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
       return localParent;
     },
 
-    createURL(nextState: SearchParameters) {
+    createURL(
+      nextState: SearchParameters | ((state: IndexUiState) => IndexUiState)
+    ) {
+      if (typeof nextState === 'function') {
+        return localInstantSearchInstance!._createURL({
+          [indexId]: nextState(localUiState),
+        });
+      }
       return localInstantSearchInstance!._createURL({
         [indexId]: getLocalWidgetsUiState(localWidgets, {
           searchParameters: nextState,
@@ -280,13 +389,34 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         );
       }
 
-      localWidgets = localWidgets.concat(widgets);
+      widgets.forEach((widget) => {
+        if (isIndexWidget(widget)) {
+          return;
+        }
 
+        if (localInstantSearchInstance && widget.dependsOn === 'recommend') {
+          localInstantSearchInstance._hasRecommendWidget = true;
+        } else if (localInstantSearchInstance) {
+          localInstantSearchInstance._hasSearchWidget = true;
+        } else if (widget.dependsOn === 'recommend') {
+          hasRecommendWidget = true;
+        } else {
+          hasSearchWidget = true;
+        }
+
+        addWidgetId(widget);
+      });
+
+      localWidgets = localWidgets.concat(widgets);
       if (localInstantSearchInstance && Boolean(widgets.length)) {
         privateHelperSetState(helper!, {
           state: getLocalWidgetsSearchParameters(localWidgets, {
             uiState: localUiState,
             initialSearchParameters: helper!.state,
+          }),
+          recommendState: getLocalWidgetsRecommendParameters(localWidgets, {
+            uiState: localUiState,
+            initialRecommendParameters: helper!.recommendState,
           }),
           _uiState: localUiState,
         });
@@ -348,29 +478,72 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         (widget) => widgets.indexOf(widget) === -1
       );
 
-      if (localInstantSearchInstance && Boolean(widgets.length)) {
-        const nextState = widgets.reduce((state, widget) => {
-          // the `dispose` method exists at this point we already assert it
-          const next = widget.dispose!({
-            helper: helper!,
-            state,
-            parent: this,
-          });
+      localWidgets.forEach((widget) => {
+        if (isIndexWidget(widget)) {
+          return;
+        }
 
-          return next || state;
-        }, helper!.state);
+        if (localInstantSearchInstance && widget.dependsOn === 'recommend') {
+          localInstantSearchInstance._hasRecommendWidget = true;
+        } else if (localInstantSearchInstance) {
+          localInstantSearchInstance._hasSearchWidget = true;
+        } else if (widget.dependsOn === 'recommend') {
+          hasRecommendWidget = true;
+        } else {
+          hasSearchWidget = true;
+        }
+      });
+
+      if (localInstantSearchInstance && Boolean(widgets.length)) {
+        const { cleanedSearchState, cleanedRecommendState } = widgets.reduce(
+          (states, widget) => {
+            // the `dispose` method exists at this point we already assert it
+            const next = widget.dispose!({
+              helper: helper!,
+              state: states.cleanedSearchState,
+              recommendState: states.cleanedRecommendState,
+              parent: this,
+            });
+
+            if (next instanceof algoliasearchHelper.RecommendParameters) {
+              states.cleanedRecommendState = next;
+            } else if (next) {
+              states.cleanedSearchState = next;
+            }
+
+            return states;
+          },
+          {
+            cleanedSearchState: helper!.state,
+            cleanedRecommendState: helper!.recommendState,
+          }
+        );
+
+        const newState = localInstantSearchInstance.future
+          .preserveSharedStateOnUnmount
+          ? getLocalWidgetsSearchParameters(localWidgets, {
+              uiState: localUiState,
+              initialSearchParameters: new algoliasearchHelper.SearchParameters(
+                {
+                  index: this.getIndexName(),
+                }
+              ),
+            })
+          : getLocalWidgetsSearchParameters(localWidgets, {
+              uiState: getLocalWidgetsUiState(localWidgets, {
+                searchParameters: cleanedSearchState,
+                helper: helper!,
+              }),
+              initialSearchParameters: cleanedSearchState,
+            });
 
         localUiState = getLocalWidgetsUiState(localWidgets, {
-          searchParameters: nextState,
+          searchParameters: newState,
           helper: helper!,
         });
 
-        helper!.setState(
-          getLocalWidgetsSearchParameters(localWidgets, {
-            uiState: localUiState,
-            initialSearchParameters: nextState,
-          })
-        );
+        helper!.setState(newState);
+        helper!.recommendState = cleanedRecommendState;
 
         if (localWidgets.length) {
           localInstantSearchInstance.scheduleSearch();
@@ -401,6 +574,14 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
           index: indexName,
         }),
       });
+      const recommendParameters = getLocalWidgetsRecommendParameters(
+        localWidgets,
+        {
+          uiState: localUiState,
+          initialRecommendParameters:
+            new algoliasearchHelper.RecommendParameters(),
+        }
+      );
 
       // This Helper is only used for state management we do not care about the
       // `searchClient`. Only the "main" Helper created at the `InstantSearch`
@@ -410,6 +591,7 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         parameters.index,
         parameters
       );
+      helper.recommendState = recommendParameters;
 
       // We forward the call to `search` to the "main" instance of the Helper
       // which is responsible for managing the queries (it's the only one that is
@@ -451,14 +633,19 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         );
       };
 
-      derivedHelper = mainHelper.derive(() =>
-        mergeSearchParameters(...resolveSearchParameters(this))
+      derivedHelper = mainHelper.derive(
+        () =>
+          mergeSearchParameters(
+            mainHelper.state,
+            ...resolveSearchParameters(this)
+          ),
+        () => this.getHelper()!.recommendState
       );
 
       const indexInitialResults =
         instantSearchInstance._initialResults?.[this.getIndexId()];
 
-      if (indexInitialResults) {
+      if (indexInitialResults?.results) {
         // We restore the shape of the results provided to the instance to respect
         // the helper's structure.
         const results = new algoliasearchHelper.SearchResults(
@@ -468,6 +655,17 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
 
         derivedHelper.lastResults = results;
         helper.lastResults = results;
+      }
+
+      if (indexInitialResults?.recommendResults) {
+        const recommendResults = new algoliasearchHelper.RecommendResults(
+          new algoliasearchHelper.RecommendParameters({
+            params: indexInitialResults.recommendResults.params,
+          }),
+          indexInitialResults.recommendResults.results
+        );
+        derivedHelper.lastRecommendResults = recommendResults;
+        helper.lastRecommendResults = recommendResults;
       }
 
       // Subscribe to the Helper state changes for the page before widgets
@@ -503,6 +701,21 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         // does not have access to lastResults, which it used to in pre-federated
         // search behavior.
         helper!.lastResults = results;
+        lastValidSearchParameters = results?._state;
+      });
+
+      // eslint-disable-next-line no-warning-comments
+      // TODO: listen to "result" event when events for Recommend are implemented
+      derivedHelper.on('recommend:result', ({ recommend }) => {
+        // The index does not render the results it schedules a new render
+        // to let all the other indices emit their own results. It allows us to
+        // run the render process in one pass.
+        instantSearchInstance.scheduleRender();
+
+        // the derived helper is the one which actually searches, but the helper
+        // which is exposed e.g. via instance.helper, doesn't search, and thus
+        // does not have access to lastRecommendResults.
+        helper!.lastRecommendResults = recommend.results;
       });
 
       // We compute the render state before calling `init` in a separate loop
@@ -541,7 +754,7 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
       // configuration step. This is mainly for backward compatibility with custom
       // widgets. When the subscription happens before the `init` step, the (static)
       // configuration of the widget is pushed in the URL. That's what we want to avoid.
-      // https://github.com/algolia/instantsearch.js/pull/994/commits/4a672ae3fd78809e213de0368549ef12e9dc9454
+      // https://github.com/algolia/instantsearch/pull/994/commits/4a672ae3fd78809e213de0368549ef12e9dc9454
       helper.on('change', (event) => {
         const { state } = event;
 
@@ -569,18 +782,50 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         // schedule a render that will render the results injected on the helper.
         instantSearchInstance.scheduleRender();
       }
+
+      if (hasRecommendWidget) {
+        instantSearchInstance._hasRecommendWidget = true;
+      }
+      if (hasSearchWidget) {
+        instantSearchInstance._hasSearchWidget = true;
+      }
     },
 
     render({ instantSearchInstance }: IndexRenderOptions) {
-      if (!this.getResults()) {
-        return;
+      // we can't attach a listener to the error event of search, as the error
+      // then would no longer be thrown for global handlers.
+      if (
+        instantSearchInstance.status === 'error' &&
+        !instantSearchInstance.mainHelper!.hasPendingRequests() &&
+        lastValidSearchParameters
+      ) {
+        helper!.setState(lastValidSearchParameters);
       }
 
-      localWidgets.forEach((widget) => {
+      // We only render index widgets if there are no results.
+      // This makes sure `render` is never called with `results` being `null`.
+      let widgetsToRender =
+        this.getResults() || derivedHelper?.lastRecommendResults
+          ? localWidgets
+          : localWidgets.filter(isIndexWidget);
+
+      widgetsToRender = widgetsToRender.filter((widget) => {
+        if (!widget.shouldRender) {
+          return true;
+        }
+
+        return widget.shouldRender({ instantSearchInstance });
+      });
+
+      widgetsToRender.forEach((widget) => {
         if (widget.getRenderState) {
           const renderState = widget.getRenderState(
             instantSearchInstance.renderState[this.getIndexId()] || {},
-            createRenderArgs(instantSearchInstance, this)
+            createRenderArgs(
+              instantSearchInstance,
+              this,
+              widget
+            ) as RenderOptions
           );
 
           storeRenderState({
@@ -591,7 +836,7 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         }
       });
 
-      localWidgets.forEach((widget) => {
+      widgetsToRender.forEach((widget) => {
         // At this point, all the variables used below are set. Both `helper`
         // and `derivedHelper` have been created at the `init` step. The attribute
         // `lastResults` might be `null` though. It's possible that a stalled render
@@ -600,14 +845,20 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         // not have results yet.
 
         if (widget.render) {
-          widget.render(createRenderArgs(instantSearchInstance, this));
+          widget.render(
+            createRenderArgs(
+              instantSearchInstance,
+              this,
+              widget
+            ) as RenderOptions
+          );
         }
       });
     },
 
     dispose() {
       localWidgets.forEach((widget) => {
-        if (widget.dispose) {
+        if (widget.dispose && helper) {
           // The dispose function is always called once the instance is started
           // (it's an effect of `removeWidgets`). The index is initialized and
           // the Helper is available. We don't care about the return value of
@@ -615,8 +866,9 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
           // because we want to keep the widgets on the instance, to allow idempotent
           // operations on `add` & `remove`.
           widget.dispose({
-            helper: helper!,
-            state: helper!.state,
+            helper,
+            state: helper.state,
+            recommendState: helper.recommendState,
             parent: this,
           });
         }
@@ -624,10 +876,10 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
 
       localInstantSearchInstance = null;
       localParent = null;
-      helper!.removeAllListeners();
+      helper?.removeAllListeners();
       helper = null;
 
-      derivedHelper!.detach();
+      derivedHelper?.detach();
       derivedHelper = null;
     },
 
@@ -672,6 +924,22 @@ const index = (widgetParams: IndexWidgetParams): IndexWidget => {
         },
         localUiState
       );
+    },
+
+    setIndexUiState<TIndexUiState extends IndexUiState = IndexUiState>(
+      indexUiState:
+        | TIndexUiState
+        | ((previousIndexUiState: TIndexUiState) => TIndexUiState)
+    ) {
+      const nextIndexUiState =
+        typeof indexUiState === 'function'
+          ? indexUiState(localUiState as TIndexUiState)
+          : indexUiState;
+
+      localInstantSearchInstance!.setUiState((state) => ({
+        ...state,
+        [indexId]: nextIndexUiState,
+      }));
     },
   };
 };

@@ -1,15 +1,16 @@
-import type { PlainSearchParameters } from 'algoliasearch-helper';
 import {
   checkRendering,
   createDocumentationMessageGenerator,
   noop,
 } from '../../lib/utils';
-import type { Connector, WidgetRenderState } from '../../types';
 import builtInCreateVoiceSearchHelper from '../../lib/voiceSearchHelper';
+
 import type {
   CreateVoiceSearchHelper,
   VoiceListeningState,
 } from '../../lib/voiceSearchHelper/types';
+import type { Connector, WidgetRenderState } from '../../types';
+import type { PlainSearchParameters } from 'algoliasearch-helper';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'voice-search',
@@ -105,6 +106,7 @@ const connectVoiceSearch: VoiceSearchConnector = function connectVoiceSearch(
               const queryLanguages = language
                 ? [language.split('-')[0]]
                 : undefined;
+              // @ts-ignore queryLanguages is allowed to be a string, not just an array
               helper.setQueryParameter('queryLanguages', queryLanguages);
 
               if (typeof additionalQueryParameters === 'function') {
@@ -112,7 +114,7 @@ const connectVoiceSearch: VoiceSearchConnector = function connectVoiceSearch(
                   helper.state.setQueryParameters({
                     ignorePlurals: true,
                     removeStopWords: true,
-                    // @ts-ignore (optionalWords only allows array in v3, while string is also valid)
+                    // @ts-ignore optionalWords is allowed to be a string too
                     optionalWords: query,
                     ...additionalQueryParameters({ query }),
                   })

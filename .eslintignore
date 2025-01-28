@@ -1,9 +1,33 @@
+# Vendors
+node_modules
+**/node_modules/**
+
+# Artifacts
+dist
+build
+website
 **/cjs
 **/es
 **/dist
+**/vue2
+**/vue3
+coverage
 
-/website
-
+# Caches
 .cache
 .parcel-cache
-**/node_modules
+.expo
+.next
+
+# Non-lintable source files
+## Polyfills for examples, retrieved from polyfill.io
+examples/**/polyfills.js
+## React-Native TypeScript wasn't supporting the mix of react 18 and 17
+examples/react/react-native
+## Excluded from global typescript config
+examples/react/next/next-env.d.ts
+specs/src/env.d.ts
+## templates that don't get installed
+packages/create-instantsearch-app/src/templates
+## test fixtures for codemods
+packages/instantsearch-codemods/__testfixtures__

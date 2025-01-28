@@ -1,20 +1,23 @@
+import {
+  createSearchClient,
+  createSingleSearchResponse,
+} from '@instantsearch/mocks';
 import algoliasearchHelper, {
   SearchResults,
   SearchParameters,
 } from 'algoliasearch-helper';
 
-import type {
-  PaginationConnectorParams,
-  PaginationRenderState,
-} from '../connectPagination';
-import connectPagination from '../connectPagination';
 import {
   createDisposeOptions,
   createInitOptions,
   createRenderOptions,
 } from '../../../../test/createWidget';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import { createSingleSearchResponse } from '@instantsearch/mocks/createAPIResponse';
+import connectPagination from '../connectPagination';
+
+import type {
+  PaginationConnectorParams,
+  PaginationRenderState,
+} from '../connectPagination';
 
 describe('connectPagination', () => {
   const getInitializedWidget = (
@@ -347,7 +350,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/pagination/
         throw new Error('expect state to be returned');
       }
 
-      expect(nextState.page).toBeUndefined();
+      expect((nextState as SearchParameters).page).toBeUndefined();
     });
   });
 

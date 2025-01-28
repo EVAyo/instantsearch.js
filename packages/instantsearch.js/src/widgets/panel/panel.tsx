@@ -1,16 +1,18 @@
 /** @jsx h */
 
+import { cx } from 'instantsearch-ui-components';
 import { h, render } from 'preact';
-import { cx } from '@algolia/ui-components-shared';
+
+import Panel from '../../components/Panel/Panel';
+import { component } from '../../lib/suit';
 import {
   createDocumentationMessageGenerator,
   getContainerNode,
   getObjectType,
   warning,
 } from '../../lib/utils';
-import { component } from '../../lib/suit';
+
 import type { PanelComponentCSSClasses } from '../../components/Panel/Panel';
-import Panel from '../../components/Panel/Panel';
 import type {
   Template,
   RenderOptions,
@@ -117,13 +119,13 @@ export type PanelWidgetParams<TWidgetFactory extends AnyWidgetFactory> = {
    * A function that is called on each render to determine if the
    * panel should be hidden based on the render options.
    */
-  hidden?(options: PanelRenderOptions<TWidgetFactory>): boolean;
+  hidden?: (options: PanelRenderOptions<TWidgetFactory>) => boolean;
 
   /**
    * A function that is called on each render to determine if the
    * panel should be collapsed based on the render options.
    */
-  collapsed?(options: PanelRenderOptions<TWidgetFactory>): boolean;
+  collapsed?: (options: PanelRenderOptions<TWidgetFactory>) => boolean;
 
   /**
    * The templates to use for the widget.
@@ -149,7 +151,7 @@ const renderer =
     containerNode: HTMLElement;
     bodyContainerNode: HTMLElement;
     cssClasses: PanelComponentCSSClasses;
-    templates: Required<PanelTemplates<TWidget>>;
+    templates: PanelTemplates<TWidget>;
   }) =>
   ({
     options,
@@ -179,7 +181,10 @@ const renderer =
 type AugmentedWidget<
   TWidgetFactory extends AnyWidgetFactory,
   TOverriddenKeys extends keyof Widget = 'init' | 'render' | 'dispose'
-> = Omit<ReturnType<TWidgetFactory>, TOverriddenKeys> &
+> = Omit<
+  ReturnType<TWidgetFactory>,
+  TOverriddenKeys | 'dependsOn' | 'getWidgetParameters'
+> &
   Pick<Required<Widget>, TOverriddenKeys>;
 
 export type PanelWidget = <TWidgetFactory extends AnyWidgetFactory>(
@@ -257,14 +262,11 @@ const panel: PanelWidget = (panelWidgetParams) => {
 
     const containerNode = getContainerNode(widgetParams.container);
 
-    const defaultTemplates: Required<PanelTemplates<typeof widgetFactory>> = {
-      header: '',
-      footer: '',
+    const defaultTemplates: PanelTemplates<typeof widgetFactory> = {
       collapseButtonText: ({ collapsed: isCollapsed }) =>
         `<svg
           class="${cssClasses.collapseIcon}"
-          width="1em"
-          height="1em"
+          style="width: 1em; height: 1em;"
           viewBox="0 0 500 500"
         >
         <path d="${

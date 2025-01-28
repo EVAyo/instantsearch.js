@@ -2,25 +2,65 @@
  * @jest-environment jsdom
  */
 /** @jsx h */
-import { h } from 'preact';
-
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import instantsearch from '../../../index.es';
-import { wait } from '@instantsearch/testutils/wait';
-import stats from '../stats';
 import {
+  createSearchClient,
   createMultiSearchResponse,
   createSingleSearchResponse,
-} from '@instantsearch/mocks/createAPIResponse';
-import type { SearchResponse } from '../../../../src/types';
-import searchBox from '../../search-box/search-box';
+} from '@instantsearch/mocks';
+import { wait } from '@instantsearch/testutils/wait';
 import { fireEvent, within } from '@testing-library/dom';
+import { h } from 'preact';
+
+import instantsearch from '../../../index.es';
+import searchBox from '../../search-box/search-box';
+import stats from '../stats';
+
+import type { SearchResponse } from '../../../../src/types';
 
 beforeEach(() => {
   document.body.innerHTML = '';
 });
 
 describe('stats', () => {
+  describe('options', () => {
+    test('throws without a `container`', () => {
+      expect(() => {
+        // @ts-expect-error
+        stats({ container: undefined });
+      }).toThrowErrorMatchingInlineSnapshot(`
+        "The \`container\` option is required.
+
+        See documentation: https://www.algolia.com/doc/api-reference/widgets/stats/js/"
+      `);
+    });
+
+    test('add custom CSS classes', async () => {
+      const container = document.createElement('div');
+      const searchClient = createSearchClient();
+
+      const search = instantsearch({
+        indexName: 'indexName',
+        searchClient,
+      });
+
+      search.addWidgets([
+        stats({
+          container,
+          cssClasses: {
+            root: 'ROOT',
+            text: 'TEXT',
+          },
+        }),
+      ]);
+
+      search.start();
+      await wait(0);
+
+      expect(container.querySelector('.ais-Stats')).toHaveClass('ROOT');
+      expect(container.querySelector('.ais-Stats-text')).toHaveClass('TEXT');
+    });
+  });
+
   describe('templates', () => {
     test('renders default templates', async () => {
       const container = document.createElement('div');

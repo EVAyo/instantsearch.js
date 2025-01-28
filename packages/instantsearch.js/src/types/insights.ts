@@ -1,5 +1,6 @@
+import type { Hit } from './results';
 import type {
-  InsightsMethodMap,
+  InsightsMethodMap as _InsightsMethodMap,
   InsightsClient as _InsightsClient,
 } from 'search-insights';
 
@@ -11,7 +12,34 @@ export type {
   OnUserTokenChange as InsightsOnUserTokenChange,
 } from 'search-insights';
 
+export type InsightsMethodMap = _InsightsMethodMap;
 export type InsightsClientMethod = keyof InsightsMethodMap;
+
+/**
+ * Method allowed by the insights middleware.
+ */
+export type InsightsMethod =
+  | 'clickedObjectIDsAfterSearch'
+  | 'clickedObjectIDs'
+  | 'clickedFilters'
+  | 'convertedObjectIDsAfterSearch'
+  | 'convertedObjectIDs'
+  | 'convertedFilters'
+  | 'viewedObjectIDs'
+  | 'viewedFilters';
+
+/**
+ * The event sent to the insights middleware.
+ */
+export type InsightsEvent<TMethod extends InsightsMethod = InsightsMethod> = {
+  insightsMethod?: TMethod;
+  payload: InsightsMethodMap[TMethod][0][0];
+  widgetType: string;
+  eventType: string; // 'view' | 'click' | 'conversion', but we're not restricting.
+  eventModifier?: string; // 'internal', but we're not restricting.
+  hits?: Hit[];
+  attribute?: string;
+};
 
 export type InsightsClientPayload = {
   eventName: string;
@@ -24,11 +52,11 @@ export type InsightsClientPayload = {
 type QueueItemMap = {
   [MethodName in keyof InsightsMethodMap]: [
     methodName: MethodName,
-    ...args: InsightsMethodMap[MethodName]
+    ...args: InsightsMethodMap[MethodName][0][0]
   ];
 };
 
-type QueueItem = QueueItemMap[keyof QueueItemMap];
+export type QueueItem = QueueItemMap[keyof QueueItemMap];
 
 export type InsightsClient = _InsightsClient & {
   queue?: QueueItem[];

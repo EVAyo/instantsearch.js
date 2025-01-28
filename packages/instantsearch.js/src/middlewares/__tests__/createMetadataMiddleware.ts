@@ -2,25 +2,21 @@
  * @jest-environment jsdom
  */
 
-import algoliasearch from 'algoliasearch';
-import algoliasearchV3 from 'algoliasearch-v3';
-import { createMetadataMiddleware } from '..';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
+import { createSearchClient } from '@instantsearch/mocks';
 import { wait } from '@instantsearch/testutils/wait';
+import algoliasearchV3 from 'algoliasearch-v3';
+import algoliasearchV4 from 'algoliasearch-v4';
+import { algoliasearch as algoliasearchV5 } from 'algoliasearch-v5';
+
+import { createMetadataMiddleware } from '..';
 import instantsearch from '../..';
 import { configure, hits, index, pagination, searchBox } from '../../widgets';
 import { isMetadataEnabled } from '../createMetadataMiddleware';
 
 declare global {
-  // using namespace so it's only in this file
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace NodeJS {
-    interface Global {
-      navigator?: {
-        userAgent?: string;
-      };
-      window: Window;
-    }
+  interface Navigator {
+    // make mutable
+    userAgent: string;
   }
 }
 
@@ -71,6 +67,7 @@ describe('createMetadataMiddleware', () => {
     });
 
     it("does not enable when there's a window but no navigator", () => {
+      // @ts-expect-error (simulate no navigator)
       global.navigator = undefined;
 
       createMetadataMiddleware();
@@ -81,6 +78,7 @@ describe('createMetadataMiddleware', () => {
     });
 
     it("does not enable when navigator is different from browser's (React Native)", () => {
+      // @ts-expect-error (simulate no userAgent)
       global.navigator!.userAgent = undefined;
 
       createMetadataMiddleware();
@@ -131,60 +129,117 @@ describe('createMetadataMiddleware', () => {
       expect(document.head).toMatchInlineSnapshot(`
         <head>
           <meta
-            content="{\\"widgets\\":[{\\"type\\":\\"ais.searchBox\\",\\"widgetType\\":\\"ais.searchBox\\",\\"params\\":[]},{\\"type\\":\\"ais.searchBox\\",\\"widgetType\\":\\"ais.searchBox\\",\\"params\\":[]},{\\"type\\":\\"ais.hits\\",\\"widgetType\\":\\"ais.hits\\",\\"params\\":[\\"escapeHTML\\"]},{\\"type\\":\\"ais.index\\",\\"widgetType\\":\\"ais.index\\",\\"params\\":[]},{\\"type\\":\\"ais.pagination\\",\\"widgetType\\":\\"ais.pagination\\",\\"params\\":[]},{\\"type\\":\\"ais.configure\\",\\"widgetType\\":\\"ais.configure\\",\\"params\\":[\\"searchParameters\\"]}]}"
+            content="{\\"widgets\\":[{\\"type\\":\\"ais.searchBox\\",\\"widgetType\\":\\"ais.searchBox\\",\\"params\\":[]},{\\"type\\":\\"ais.searchBox\\",\\"widgetType\\":\\"ais.searchBox\\",\\"params\\":[]},{\\"type\\":\\"ais.hits\\",\\"widgetType\\":\\"ais.hits\\",\\"params\\":[\\"escapeHTML\\"]},{\\"type\\":\\"ais.index\\",\\"widgetType\\":\\"ais.index\\",\\"params\\":[]},{\\"type\\":\\"ais.pagination\\",\\"widgetType\\":\\"ais.pagination\\",\\"params\\":[]},{\\"type\\":\\"ais.configure\\",\\"widgetType\\":\\"ais.configure\\",\\"params\\":[\\"searchParameters\\"]},{\\"middleware\\":true,\\"type\\":\\"ais.metadata\\",\\"internal\\":true}]}"
             name="instantsearch:widgets"
           />
         </head>
       `);
 
-      expect(JSON.parse(document.head.querySelector('meta')!.content))
+      expect(JSON.parse(document.head.querySelector('meta')!.content).widgets)
         .toMatchInlineSnapshot(`
-        {
-          "widgets": [
-            {
-              "params": [],
-              "type": "ais.searchBox",
-              "widgetType": "ais.searchBox",
-            },
-            {
-              "params": [],
-              "type": "ais.searchBox",
-              "widgetType": "ais.searchBox",
-            },
-            {
-              "params": [
-                "escapeHTML",
-              ],
-              "type": "ais.hits",
-              "widgetType": "ais.hits",
-            },
-            {
-              "params": [],
-              "type": "ais.index",
-              "widgetType": "ais.index",
-            },
-            {
-              "params": [],
-              "type": "ais.pagination",
-              "widgetType": "ais.pagination",
-            },
-            {
-              "params": [
-                "searchParameters",
-              ],
-              "type": "ais.configure",
-              "widgetType": "ais.configure",
-            },
-          ],
-        }
+        [
+          {
+            "params": [],
+            "type": "ais.searchBox",
+            "widgetType": "ais.searchBox",
+          },
+          {
+            "params": [],
+            "type": "ais.searchBox",
+            "widgetType": "ais.searchBox",
+          },
+          {
+            "params": [
+              "escapeHTML",
+            ],
+            "type": "ais.hits",
+            "widgetType": "ais.hits",
+          },
+          {
+            "params": [],
+            "type": "ais.index",
+            "widgetType": "ais.index",
+          },
+          {
+            "params": [],
+            "type": "ais.pagination",
+            "widgetType": "ais.pagination",
+          },
+          {
+            "params": [
+              "searchParameters",
+            ],
+            "type": "ais.configure",
+            "widgetType": "ais.configure",
+          },
+          {
+            "internal": true,
+            "middleware": true,
+            "type": "ais.metadata",
+          },
+        ]
+      `);
+    });
+
+    it('fills it with metadata after start', async () => {
+      // not using createMetadataMiddleware() here,
+      // since metadata is built into instantsearch
+      const search = instantsearch({
+        searchClient: createSearchClient(),
+        indexName: 'test',
+        routing: true,
+      });
+
+      search.use(
+        () => ({ $$type: 'test', $$internal: false }),
+        // @ts-expect-error (unknown middleware, shouldn't error)
+        () => ({})
+      );
+
+      search.start();
+
+      await wait(100);
+
+      expect(document.head).toMatchInlineSnapshot(`
+        <head>
+          <meta
+            content="{\\"widgets\\":[{\\"middleware\\":true,\\"type\\":\\"ais.router({router:ais.browser, stateMapping:ais.simple})\\",\\"internal\\":true},{\\"middleware\\":true,\\"type\\":\\"ais.metadata\\",\\"internal\\":true},{\\"middleware\\":true,\\"type\\":\\"test\\",\\"internal\\":false},{\\"middleware\\":true,\\"type\\":\\"__unknown__\\",\\"internal\\":false}]}"
+            name="instantsearch:widgets"
+          />
+        </head>
+      `);
+
+      expect(JSON.parse(document.head.querySelector('meta')!.content).widgets)
+        .toMatchInlineSnapshot(`
+        [
+          {
+            "internal": true,
+            "middleware": true,
+            "type": "ais.router({router:ais.browser, stateMapping:ais.simple})",
+          },
+          {
+            "internal": true,
+            "middleware": true,
+            "type": "ais.metadata",
+          },
+          {
+            "internal": false,
+            "middleware": true,
+            "type": "test",
+          },
+          {
+            "internal": false,
+            "middleware": true,
+            "type": "__unknown__",
+          },
+        ]
       `);
     });
 
     describe('fills it with user agent after start', () => {
-      it('for the v4 client', async () => {
+      it('for the v5 client', async () => {
         const fakeSearchClient = createSearchClient();
-        const searchClient = algoliasearch('', '');
-        // @ts-expect-error overriding the search method for testing
+        const searchClient = algoliasearchV5('qsdf', 'qsdf') as any;
         searchClient.search = fakeSearchClient.search;
 
         // not using createMetadataMiddleware() here,
@@ -201,20 +256,29 @@ describe('createMetadataMiddleware', () => {
         expect(document.head.children).toHaveLength(1);
         expect(document.head.children[0]).toEqual(expect.any(HTMLMetaElement));
 
-        expect(
-          JSON.parse(document.head.querySelector('meta')!.content)
-        ).toEqual({
-          ua: expect.stringMatching(
-            /^Algolia for JavaScript \(4\.(\d+\.?)+\); Node\.js \((\d+\.?)+\); instantsearch\.js \((\d+\.?)+\); JS Helper \((\d+\.?)+\)$/
-          ),
-          widgets: [],
+        const metadata = JSON.parse(
+          document.head.querySelector('meta')!.content
+        );
+
+        expect(metadata).toEqual({
+          ua: expect.any(String),
+          widgets: expect.any(Array),
         });
+
+        expect(
+          metadata.ua.split(';').map((part: string) => part.trim())
+        ).toEqual([
+          expect.stringMatching(/Algolia for JavaScript \(5\..*\)/),
+          expect.stringMatching(/Search \(5\..*\)/),
+          expect.stringMatching(/Node.js \(.*\)/),
+          expect.stringMatching(/instantsearch.js \(4\..*\)/),
+          expect.stringMatching(/JS Helper \(3\..*\)/),
+        ]);
       });
 
-      it('for the v4 client with custom user agent', async () => {
+      it('for the v5 client with custom user agent', async () => {
         const fakeSearchClient = createSearchClient();
-        const searchClient = algoliasearch('', '');
-        // @ts-expect-error overriding the search method for testing
+        const searchClient = algoliasearchV5('qsdf', 'qsdf') as any;
         searchClient.search = fakeSearchClient.search;
 
         // not using createMetadataMiddleware() here,
@@ -233,14 +297,104 @@ describe('createMetadataMiddleware', () => {
         expect(document.head.children).toHaveLength(1);
         expect(document.head.children[0]).toEqual(expect.any(HTMLMetaElement));
 
-        expect(
-          JSON.parse(document.head.querySelector('meta')!.content)
-        ).toEqual({
-          ua: expect.stringMatching(
-            /^Algolia for JavaScript \(4\.(\d+\.?)+\); Node\.js \((\d+\.?)+\); instantsearch\.js \((\d+\.?)+\); JS Helper \((\d+\.?)+\); test \(cool\)$/
-          ),
-          widgets: [],
+        const metadata = JSON.parse(
+          document.head.querySelector('meta')!.content
+        );
+
+        expect(metadata).toEqual({
+          ua: expect.any(String),
+          widgets: expect.any(Array),
         });
+
+        expect(
+          metadata.ua.split(';').map((part: string) => part.trim())
+        ).toEqual([
+          expect.stringMatching(/Algolia for JavaScript \(5\..*\)/),
+          expect.stringMatching(/Search \(5\..*\)/),
+          expect.stringMatching(/Node.js \(.*\)/),
+          expect.stringMatching(/instantsearch.js \(4\..*\)/),
+          expect.stringMatching(/JS Helper \(3\..*\)/),
+          'test (cool)',
+        ]);
+      });
+
+      it('for the v4 client', async () => {
+        const fakeSearchClient = createSearchClient();
+        const searchClient = algoliasearchV4('', '') as any;
+        searchClient.search = fakeSearchClient.search;
+
+        // not using createMetadataMiddleware() here,
+        // since metadata is built into instantsearch
+        const search = instantsearch({
+          searchClient,
+          indexName: 'test',
+        });
+
+        search.start();
+
+        await wait(100);
+
+        expect(document.head.children).toHaveLength(1);
+        expect(document.head.children[0]).toEqual(expect.any(HTMLMetaElement));
+
+        const metadata = JSON.parse(
+          document.head.querySelector('meta')!.content
+        );
+
+        expect(metadata).toEqual({
+          ua: expect.any(String),
+          widgets: expect.any(Array),
+        });
+
+        expect(
+          metadata.ua.split(';').map((part: string) => part.trim())
+        ).toEqual([
+          expect.stringMatching(/Algolia for JavaScript \(4\..*\)/),
+          expect.stringMatching(/Node.js \(.*\)/),
+          expect.stringMatching(/instantsearch.js \(4\..*\)/),
+          expect.stringMatching(/JS Helper \(3\..*\)/),
+        ]);
+      });
+
+      it('for the v4 client with custom user agent', async () => {
+        const fakeSearchClient = createSearchClient();
+        const searchClient = algoliasearchV4('', '') as any;
+        searchClient.search = fakeSearchClient.search;
+
+        // not using createMetadataMiddleware() here,
+        // since metadata is built into instantsearch
+        const search = instantsearch({
+          searchClient,
+          indexName: 'test',
+        });
+
+        search.start();
+
+        searchClient.addAlgoliaAgent('test', 'cool');
+
+        await wait(100);
+
+        expect(document.head.children).toHaveLength(1);
+        expect(document.head.children[0]).toEqual(expect.any(HTMLMetaElement));
+
+        const metadata = JSON.parse(
+          document.head.querySelector('meta')!.content
+        );
+
+        expect(metadata).toEqual({
+          ua: expect.any(String),
+          widgets: expect.any(Array),
+        });
+
+        expect(
+          metadata.ua.split(';').map((part: string) => part.trim())
+        ).toEqual([
+          expect.stringMatching(/Algolia for JavaScript \(4\..*\)/),
+          expect.stringMatching(/Node.js \(.*\)/),
+          expect.stringMatching(/instantsearch.js \(4\..*\)/),
+          expect.stringMatching(/JS Helper \(3\..*\)/),
+          'test (cool)',
+        ]);
       });
 
       it('for the v3 client', async () => {
@@ -262,14 +416,23 @@ describe('createMetadataMiddleware', () => {
         expect(document.head.children).toHaveLength(1);
         expect(document.head.children[0]).toEqual(expect.any(HTMLMetaElement));
 
-        expect(
-          JSON.parse(document.head.querySelector('meta')!.content)
-        ).toEqual({
-          ua: expect.stringMatching(
-            /^Algolia for JavaScript \(3\.(\d+\.?)+\); Node\.js \((\d+\.?)+\); instantsearch\.js \((\d+\.?)+\); JS Helper \((\d+\.?)+\)$/
-          ),
-          widgets: [],
+        const metadata = JSON.parse(
+          document.head.querySelector('meta')!.content
+        );
+
+        expect(metadata).toEqual({
+          ua: expect.any(String),
+          widgets: expect.any(Array),
         });
+
+        expect(
+          metadata.ua.split(';').map((part: string) => part.trim())
+        ).toEqual([
+          expect.stringMatching(/Algolia for JavaScript \(3\..*\)/),
+          expect.stringMatching(/Node.js \(.*\)/),
+          expect.stringMatching(/instantsearch.js \(4\..*\)/),
+          expect.stringMatching(/JS Helper \(3\..*\)/),
+        ]);
       });
 
       it('for the v3 client with custom user agent', async () => {
@@ -293,14 +456,24 @@ describe('createMetadataMiddleware', () => {
         expect(document.head.children).toHaveLength(1);
         expect(document.head.children[0]).toEqual(expect.any(HTMLMetaElement));
 
-        expect(
-          JSON.parse(document.head.querySelector('meta')!.content)
-        ).toEqual({
-          ua: expect.stringMatching(
-            /^Algolia for JavaScript \(3\.(\d+\.?)+\); Node\.js \((\d+\.?)+\); instantsearch\.js \((\d+\.?)+\); JS Helper \((\d+\.?)+\); test \(cool\)$/
-          ),
-          widgets: [],
+        const metadata = JSON.parse(
+          document.head.querySelector('meta')!.content
+        );
+
+        expect(metadata).toEqual({
+          ua: expect.any(String),
+          widgets: expect.any(Array),
         });
+
+        expect(
+          metadata.ua.split(';').map((part: string) => part.trim())
+        ).toEqual([
+          expect.stringMatching(/Algolia for JavaScript \(3\..*\)/),
+          expect.stringMatching(/Node.js \(.*\)/),
+          expect.stringMatching(/instantsearch.js \(4\..*\)/),
+          expect.stringMatching(/JS Helper \(3\..*\)/),
+          'test (cool)',
+        ]);
       });
 
       it('for a custom client (does not error)', async () => {
@@ -323,7 +496,7 @@ describe('createMetadataMiddleware', () => {
         expect(
           JSON.parse(document.head.querySelector('meta')!.content)
         ).toEqual({
-          widgets: [],
+          widgets: expect.any(Array),
         });
       });
     });

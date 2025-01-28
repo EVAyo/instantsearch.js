@@ -1,4 +1,5 @@
 import { storiesOf } from '@storybook/html';
+
 import { withHits } from '../.storybook/decorators';
 
 storiesOf('Basics/DynamicWidgets', module)
@@ -20,8 +21,8 @@ storiesOf('Basics/DynamicWidgets', module)
               typeof instantsearch.widgets.refinementList
             >({
               templates: {
-                header(stuff) {
-                  return stuff.widgetParams.attribute;
+                header({ widgetParams }) {
+                  return widgetParams.attribute;
                 },
               },
             })(instantsearch.widgets.refinementList)({ attribute, container }),
@@ -33,7 +34,7 @@ storiesOf('Basics/DynamicWidgets', module)
               }),
             (container) =>
               instantsearch.widgets.panel({
-                templates: { header: 'hierarchy' },
+                templates: { header: () => 'hierarchy' },
               })(instantsearch.widgets.hierarchicalMenu)({
                 container,
                 attributes: [
@@ -65,8 +66,8 @@ storiesOf('Basics/DynamicWidgets', module)
               typeof instantsearch.widgets.refinementList
             >({
               templates: {
-                header(stuff) {
-                  return stuff.widgetParams.attribute;
+                header({ widgetParams }) {
+                  return widgetParams.attribute;
                 },
               },
             })(instantsearch.widgets.refinementList)({ attribute, container }),
@@ -78,7 +79,7 @@ storiesOf('Basics/DynamicWidgets', module)
               }),
             (container) =>
               instantsearch.widgets.panel({
-                templates: { header: 'hierarchy' },
+                templates: { header: () => 'hierarchy' },
               })(instantsearch.widgets.hierarchicalMenu)({
                 container,
                 attributes: [

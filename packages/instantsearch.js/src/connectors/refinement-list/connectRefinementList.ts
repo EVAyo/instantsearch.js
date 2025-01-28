@@ -1,5 +1,3 @@
-import type { AlgoliaSearchHelper, SearchResults } from 'algoliasearch-helper';
-import type { SendEventForFacet } from '../../lib/utils';
 import {
   escapeFacets,
   TAG_PLACEHOLDER,
@@ -8,7 +6,10 @@ import {
   createDocumentationMessageGenerator,
   createSendEventForFacet,
   noop,
+  warning,
 } from '../../lib/utils';
+
+import type { SendEventForFacet } from '../../lib/utils';
 import type {
   Connector,
   TransformItems,
@@ -19,7 +20,9 @@ import type {
   FacetHit,
   CreateURL,
   WidgetRenderState,
+  IndexUiState,
 } from '../../types';
+import type { AlgoliaSearchHelper, SearchResults } from 'algoliasearch-helper';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'refinement-list',
@@ -108,7 +111,7 @@ export type RefinementListRenderState = {
   /**
    * Action to apply selected refinements.
    */
-  refine(value: string): void;
+  refine: (value: string) => void;
   /**
    * Send event to insights middleware
    */
@@ -116,13 +119,15 @@ export type RefinementListRenderState = {
   /**
    * Searches for values inside the list.
    */
-  searchForItems(query: string): void;
+  searchForItems: (query: string) => void;
   /**
    * `true` if the values are from an index search.
    */
   isFromSearch: boolean;
   /**
    * `true` if a refinement can be applied.
+   * @MAJOR: reconsider how `canRefine` is computed so it both accounts for the
+   * items returned in the main search and in SFFV.
    */
   canRefine: boolean;
   /**
@@ -137,7 +142,7 @@ export type RefinementListRenderState = {
   /**
    * Toggles the number of values displayed between `limit` and `showMoreLimit`.
    */
-  toggleShowMore(): void;
+  toggleShowMore: () => void;
 };
 
 export type RefinementListWidgetDescription = {
@@ -379,7 +384,7 @@ const connectRefinementList: RefinementListConnector =
             });
 
             triggerRefine = (facetValue) => {
-              sendEvent!('click', facetValue);
+              sendEvent!('click:internal', facetValue);
               helper.toggleFacetRefinement(attribute, facetValue).search();
             };
 
@@ -430,10 +435,16 @@ const connectRefinementList: RefinementListConnector =
           const canToggleShowMore = canShowLess || canShowMore;
 
           return {
-            createURL: (facetValue) =>
-              createURL(
-                state.resetPage().toggleFacetRefinement(attribute, facetValue)
-              ),
+            createURL: (facetValue: string) => {
+              return createURL((uiState) =>
+                this.getWidgetUiState(uiState, {
+                  searchParameters: state
+                    .resetPage()
+                    .toggleFacetRefinement(attribute, facetValue),
+                  helper,
+                })
+              );
+            },
             items,
             refine: triggerRefine,
             searchForItems: searchFacetValues,
@@ -467,29 +478,54 @@ const connectRefinementList: RefinementListConnector =
               ? searchParameters.getDisjunctiveRefinements(attribute)
               : searchParameters.getConjunctiveRefinements(attribute);
 
-          if (!values.length) {
-            return uiState;
-          }
-
-          return {
-            ...uiState,
-            refinementList: {
-              ...uiState.refinementList,
-              [attribute]: values,
+          return removeEmptyRefinementsFromUiState(
+            {
+              ...uiState,
+              refinementList: {
+                ...uiState.refinementList,
+                [attribute]: values,
+              },
             },
-          };
+            attribute
+          );
         },
 
         getWidgetSearchParameters(searchParameters, { uiState }) {
           const isDisjunctive = operator === 'or';
+
+          if (searchParameters.isHierarchicalFacet(attribute)) {
+            warning(
+              false,
+              `RefinementList: Attribute "${attribute}" is already used by another widget applying hierarchical faceting.
+As this is not supported, please make sure to remove this other widget or this RefinementList widget will not work at all.`
+            );
+
+            return searchParameters;
+          }
+
+          if (
+            (isDisjunctive && searchParameters.isConjunctiveFacet(attribute)) ||
+            (!isDisjunctive && searchParameters.isDisjunctiveFacet(attribute))
+          ) {
+            warning(
+              false,
+              `RefinementList: Attribute "${attribute}" is used by another refinement list with a different operator.
+As this is not supported, please make sure to only use this attribute with one of the two operators.`
+            );
+
+            return searchParameters;
+          }
+
           const values =
             uiState.refinementList && uiState.refinementList[attribute];
 
-          const withoutRefinements =
-            searchParameters.clearRefinements(attribute);
           const withFacetConfiguration = isDisjunctive
-            ? withoutRefinements.addDisjunctiveFacet(attribute)
-            : withoutRefinements.addFacet(attribute);
+            ? searchParameters
+                .addDisjunctiveFacet(attribute)
+                .removeDisjunctiveFacetRefinement(attribute)
+            : searchParameters
+                .addFacet(attribute)
+                .removeFacetRefinement(attribute);
 
           const currentMaxValuesPerFacet =
             withFacetConfiguration.maxValuesPerFacet || 0;
@@ -529,5 +565,27 @@ const connectRefinementList: RefinementListConnector =
       };
     };
   };
+
+function removeEmptyRefinementsFromUiState(
+  indexUiState: IndexUiState,
+  attribute: string
+): IndexUiState {
+  if (!indexUiState.refinementList) {
+    return indexUiState;
+  }
+
+  if (
+    !indexUiState.refinementList[attribute] ||
+    indexUiState.refinementList[attribute].length === 0
+  ) {
+    delete indexUiState.refinementList[attribute];
+  }
+
+  if (Object.keys(indexUiState.refinementList).length === 0) {
+    delete indexUiState.refinementList;
+  }
+
+  return indexUiState;
+}
 
 export default connectRefinementList;

@@ -1,28 +1,30 @@
 /** @jsx h */
 
+import { cx } from 'instantsearch-ui-components';
 import { h, render } from 'preact';
-import { cx } from '@algolia/ui-components-shared';
-import type {
-  ToggleRefinementComponentCSSClasses,
-  ToggleRefinementComponentTemplates,
-} from '../../components/ToggleRefinement/ToggleRefinement';
+
 import ToggleRefinement from '../../components/ToggleRefinement/ToggleRefinement';
-import type {
-  ToggleRefinementConnectorParams,
-  ToggleRefinementWidgetDescription,
-  ToggleRefinementValue,
-  ToggleRefinementRenderState,
-} from '../../connectors/toggle-refinement/connectToggleRefinement';
 import connectToggleRefinement from '../../connectors/toggle-refinement/connectToggleRefinement';
-import defaultTemplates from './defaultTemplates';
+import { component } from '../../lib/suit';
+import { prepareTemplateProps } from '../../lib/templating';
 import {
   getContainerNode,
   createDocumentationMessageGenerator,
 } from '../../lib/utils';
-import { prepareTemplateProps } from '../../lib/templating';
-import type { RendererOptions, Template, WidgetFactory } from '../../types';
-import { component } from '../../lib/suit';
+
+import defaultTemplates from './defaultTemplates';
+
+import type {
+  ToggleRefinementComponentCSSClasses,
+  ToggleRefinementComponentTemplates,
+} from '../../components/ToggleRefinement/ToggleRefinement';
+import type {
+  ToggleRefinementConnectorParams,
+  ToggleRefinementWidgetDescription,
+  ToggleRefinementRenderState,
+} from '../../connectors/toggle-refinement/connectToggleRefinement';
 import type { PreparedTemplateProps } from '../../lib/templating';
+import type { RendererOptions, Template, WidgetFactory } from '../../types';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'toggle-refinement',
@@ -96,7 +98,7 @@ export type ToggleRefinementTemplates = Partial<{
   /**
    * the text that describes the toggle action
    */
-  labelText: Template<ToggleRefinementValue & { name: string }>;
+  labelText: Template<ToggleRefinementRenderState['value']>;
 }>;
 
 export type ToggleRefinementWidgetParams = {

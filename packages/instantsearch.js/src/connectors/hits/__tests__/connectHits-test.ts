@@ -2,31 +2,33 @@
  * @jest-environment jsdom
  */
 
+import {
+  createSearchClient,
+  createMultiSearchResponse,
+  createSingleSearchResponse,
+} from '@instantsearch/mocks';
+import { wait } from '@instantsearch/testutils/wait';
 import algoliasearchHelper, {
   SearchParameters,
   SearchResults,
 } from 'algoliasearch-helper';
-import { TAG_PLACEHOLDER, deserializePayload } from '../../../lib/utils';
-import connectHits from '../connectHits';
+
+import { createInstantSearch } from '../../../../test/createInstantSearch';
 import {
   createDisposeOptions,
   createInitOptions,
   createRenderOptions,
 } from '../../../../test/createWidget';
-import { createSearchClient } from '@instantsearch/mocks/createSearchClient';
-import {
-  createMultiSearchResponse,
-  createSingleSearchResponse,
-} from '@instantsearch/mocks/createAPIResponse';
+import instantsearch from '../../../index.es';
+import { TAG_PLACEHOLDER, deserializePayload } from '../../../lib/utils';
+import connectHits from '../connectHits';
+
 import type {
   EscapedHits,
   Hit,
   HitAttributeHighlightResult,
   SearchResponse,
 } from '../../../types';
-import { createInstantSearch } from '../../../../test/createInstantSearch';
-import { wait } from '@instantsearch/testutils/wait';
-import instantsearch from '../../../index.es';
 
 jest.mock('../../../lib/utils/hits-absolute-position', () => ({
   // The real implementation creates a new array instance, which can cause bugs,
@@ -75,7 +77,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptions({
         helper,
         state: helper.state,
@@ -88,7 +90,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       true
     );
 
-    widget.render!(
+    widget.render(
       createRenderOptions({
         results: new SearchResults(helper.state, [
           createSingleSearchResponse({ hits: [] }),
@@ -113,7 +115,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptions({
         helper,
         state: helper.state,
@@ -136,7 +138,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const results = new SearchResults(helper.state, [
       createSingleSearchResponse({ hits }),
     ]);
-    widget.render!(
+    widget.render(
       createRenderOptions({
         results,
         state: helper.state,
@@ -161,7 +163,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptions({
         helper,
         state: helper.state,
@@ -176,23 +178,25 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       expect.anything()
     );
 
-    const hits = [
-      {
-        objectID: '1',
-        _highlightResult: {
-          foobar: {
-            value: `<script>${TAG_PLACEHOLDER.highlightPreTag}foobar${TAG_PLACEHOLDER.highlightPostTag}</script>`,
-            matchLevel: 'partial',
-            matchedWords: ['foobar'],
-          },
-        },
-      },
-    ];
-
     const results = new SearchResults(helper.state, [
-      createSingleSearchResponse(createSingleSearchResponse({ hits })),
+      createSingleSearchResponse(
+        createSingleSearchResponse({
+          hits: [
+            {
+              objectID: '1',
+              _highlightResult: {
+                foobar: {
+                  value: `<script>${TAG_PLACEHOLDER.highlightPreTag}foobar${TAG_PLACEHOLDER.highlightPostTag}</script>`,
+                  matchLevel: 'partial',
+                  matchedWords: ['foobar'],
+                },
+              },
+            },
+          ],
+        })
+      ),
     ]);
-    widget.render!(
+    widget.render(
       createRenderOptions({
         results,
         state: helper.state,
@@ -233,7 +237,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptions({
         helper,
         state: helper.state,
@@ -254,7 +258,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const results = new SearchResults(helper.state, [
       createSingleSearchResponse({ hits }),
     ]);
-    widget.render!(
+    widget.render(
       createRenderOptions({
         results,
         state: helper.state,
@@ -289,8 +293,8 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       createSingleSearchResponse(),
     ]);
 
-    widget.init!(createInitOptions({ helper, state: helper.state }));
-    widget.render!(
+    widget.init(createInitOptions({ helper, state: helper.state }));
+    widget.render(
       createRenderOptions({
         results,
         helper,
@@ -312,7 +316,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptions({
         helper,
         state: helper.state,
@@ -327,7 +331,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const results = new SearchResults(helper.state, [
       createSingleSearchResponse({ hits, queryID: 'theQueryID' }),
     ]);
-    widget.render!(
+    widget.render(
       createRenderOptions({
         results,
         state: helper.state,
@@ -376,7 +380,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptions({
         helper,
         state: helper.state,
@@ -412,7 +416,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       createSingleSearchResponse({ hits }),
     ]);
 
-    widget.render!(
+    widget.render(
       createRenderOptions({
         results,
         state: helper.state,
@@ -463,7 +467,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
     const helper = algoliasearchHelper(createSearchClient(), '', {});
     helper.search = jest.fn();
 
-    widget.init!(
+    widget.init(
       createInitOptions({
         helper,
         state: helper.state,
@@ -476,7 +480,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       }),
     ]);
 
-    widget.render!(
+    widget.render(
       createRenderOptions({
         results,
         state: helper.state,
@@ -504,6 +508,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
 
       expect(renderState1.hits).toEqual({
         hits: [],
+        items: [],
         sendEvent: expect.any(Function),
         bindEvent: expect.any(Function),
         results: undefined,
@@ -535,6 +540,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
 
       expect(renderState2.hits).toEqual({
         hits: expectedHits,
+        items: expectedHits,
         sendEvent: renderState1.hits.sendEvent,
         bindEvent: renderState1.hits.bindEvent,
         results,
@@ -552,6 +558,12 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       const helper = algoliasearchHelper(createSearchClient(), 'indexName', {
         index: 'indexName',
       });
+      const banner = { image: { urls: [{ url: 'https://example.com' }] } };
+      const renderingContent = {
+        widgets: {
+          banners: [banner],
+        },
+      };
 
       const renderState1 = hitsWidget.getWidgetRenderState(
         createInitOptions({ state: helper.state, helper })
@@ -559,6 +571,8 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
 
       expect(renderState1).toEqual({
         hits: [],
+        items: [],
+        banner: undefined,
         sendEvent: expect.any(Function),
         bindEvent: expect.any(Function),
         results: undefined,
@@ -571,7 +585,13 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       ];
 
       const results = new SearchResults(helper.state, [
-        createSingleSearchResponse({ hits, queryID: 'theQueryID' }),
+        createSingleSearchResponse({
+          hits,
+          queryID: 'theQueryID',
+          // @TODO: remove once algoliasearch js client has been updated
+          // @ts-expect-error
+          renderingContent,
+        }),
       ]);
 
       const renderState2 = hitsWidget.getWidgetRenderState(
@@ -589,6 +609,8 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
 
       expect(renderState2).toEqual({
         hits: expectedHits,
+        items: expectedHits,
+        banner,
         sendEvent: renderState1.sendEvent,
         bindEvent: renderState2.bindEvent,
         results,
@@ -603,7 +625,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       const makeWidget = connectHits(render);
       const widget = makeWidget({});
 
-      const actual = widget.getWidgetSearchParameters!(new SearchParameters(), {
+      const actual = widget.getWidgetSearchParameters(new SearchParameters(), {
         uiState: {},
       });
 
@@ -617,7 +639,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
         escapeHTML: false,
       });
 
-      const actual = widget.getWidgetSearchParameters!(new SearchParameters(), {
+      const actual = widget.getWidgetSearchParameters(new SearchParameters(), {
         uiState: {},
       });
 
@@ -636,7 +658,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
 
       expect(unmountFn).toHaveBeenCalledTimes(0);
 
-      widget.dispose!(createDisposeOptions({ helper, state: helper.state }));
+      widget.dispose(createDisposeOptions({ helper, state: helper.state }));
 
       expect(unmountFn).toHaveBeenCalledTimes(1);
     });
@@ -649,7 +671,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       const widget = makeWidget({});
 
       expect(() =>
-        widget.dispose!(createDisposeOptions({ helper, state: helper.state }))
+        widget.dispose(createDisposeOptions({ helper, state: helper.state }))
       ).not.toThrow();
     });
 
@@ -670,12 +692,12 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
         TAG_PLACEHOLDER.highlightPostTag
       );
 
-      const nextState = widget.dispose!(
+      const nextState = widget.dispose(
         createDisposeOptions({
           helper,
           state: helper.state,
         })
-      ) as SearchParameters;
+      );
 
       expect(nextState.highlightPreTag).toBeUndefined();
       expect(nextState.highlightPostTag).toBeUndefined();
@@ -696,12 +718,12 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       expect(helper.state.highlightPreTag).toBe('<mark>');
       expect(helper.state.highlightPostTag).toBe('</mark>');
 
-      const nextState = widget.dispose!(
+      const nextState = widget.dispose(
         createDisposeOptions({
           helper,
           state: helper.state,
         })
-      ) as SearchParameters;
+      );
 
       expect(nextState.highlightPreTag).toBe('<mark>');
       expect(nextState.highlightPostTag).toBe('</mark>');
@@ -722,7 +744,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
         state: helper.state,
       });
       const instantSearchInstance = initOptions.instantSearchInstance;
-      widget.init!(initOptions);
+      widget.init(initOptions);
 
       const hits = [
         {
@@ -742,7 +764,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
       const results = new SearchResults(helper.state, [
         createSingleSearchResponse({ hits }),
       ]);
-      widget.render!(
+      widget.render(
         createRenderOptions({
           results,
           state: helper.state,
@@ -764,7 +786,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
             sendEventToInsights: jest.fn(),
           });
 
-          widget.init!(
+          widget.init(
             createInitOptions({
               instantSearchInstance,
             })
@@ -793,7 +815,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
             createSingleSearchResponse({ hits }),
           ]);
 
-          widget.render!(
+          widget.render(
             createRenderOptions({
               instantSearchInstance,
               results,
@@ -807,6 +829,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
             instantSearchInstance.sendEventToInsights
           ).toHaveBeenCalledWith({
             eventType: 'view',
+            eventModifier: 'internal',
             hits: [
               {
                 __position: 0,
@@ -868,8 +891,8 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
             stalledSearchDelay: 1,
             indexName: 'indexName',
           });
-          instantSearchInstance.sendEventToInsights = jest.fn();
           instantSearchInstance.start();
+          instantSearchInstance.sendEventToInsights = jest.fn();
 
           instantSearchInstance.addWidgets([widget]);
 
@@ -903,7 +926,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
           });
           const instantSearchInstance = initOptions.instantSearchInstance;
           instantSearchInstance.sendEventToInsights = jest.fn();
-          widget.init!(initOptions);
+          widget.init(initOptions);
 
           const hits = [
             {
@@ -918,7 +941,7 @@ See documentation: https://www.algolia.com/doc/api-reference/widgets/hits/js/#co
             createSingleSearchResponse({ hits }),
           ]);
 
-          widget.render!(
+          widget.render(
             createRenderOptions({
               results,
               state: helper.state,

@@ -1,9 +1,12 @@
 import { panel, rangeSlider } from 'instantsearch.js/es/widgets';
+
 import { collapseButtonText } from '../templates/panel';
 
 const priceRangeSlider = panel({
   templates: {
-    header: 'Price',
+    header() {
+      return 'Price';
+    },
     collapseButtonText,
   },
   collapsed: () => false,
@@ -14,7 +17,7 @@ export const priceSlider = priceRangeSlider({
   attribute: 'price',
   pips: false,
   tooltips: {
-    format(value) {
+    format(value: number) {
       return `${Math.round(value).toLocaleString()}`;
     },
   },

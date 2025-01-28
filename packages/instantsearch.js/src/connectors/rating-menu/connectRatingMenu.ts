@@ -1,8 +1,3 @@
-import type {
-  AlgoliaSearchHelper,
-  SearchParameters,
-  SearchResults,
-} from 'algoliasearch-helper';
 import {
   checkRendering,
   createDocumentationLink,
@@ -10,13 +5,23 @@ import {
   noop,
   warning,
 } from '../../lib/utils';
+
+import type { InsightsEvent } from '../../middlewares';
 import type {
   Connector,
   InstantSearch,
   CreateURL,
   WidgetRenderState,
+  Widget,
+  InitOptions,
+  RenderOptions,
+  IndexUiState,
 } from '../../types';
-import type { InsightsEvent } from '../../middlewares';
+import type {
+  AlgoliaSearchHelper,
+  SearchParameters,
+  SearchResults,
+} from 'algoliasearch-helper';
 
 const withUsage = createDocumentationMessageGenerator({
   name: 'rating-menu',
@@ -44,7 +49,8 @@ const createSendEvent: CreateSendEvent =
       instantSearchInstance.sendEventToInsights(args[0]);
       return;
     }
-    const [eventType, facetValue, eventName = 'Filter Applied'] = args;
+    const [, facetValue, eventName = 'Filter Applied'] = args;
+    const [eventType, eventModifier] = args[0].split(':');
     if (eventType !== 'click') {
       return;
     }
@@ -54,6 +60,7 @@ const createSendEvent: CreateSendEvent =
         insightsMethod: 'clickedFilters',
         widgetType: $$type,
         eventType,
+        eventModifier,
         payload: {
           eventName,
           index: helper.getIndex(),
@@ -150,7 +157,7 @@ export type RatingMenuWidgetDescription = {
   };
   indexUiState: {
     ratingMenu: {
-      [attribute: string]: number;
+      [attribute: string]: number | undefined;
     };
   };
 };
@@ -263,7 +270,7 @@ const connectRatingMenu: RatingMenuConnector = function connectRatingMenu(
       helper: AlgoliaSearchHelper,
       facetValue: string
     ) => {
-      sendEvent('click', facetValue);
+      sendEvent('click:internal', facetValue);
       helper.setState(getRefinedState(helper.state, facetValue)).search();
     };
 
@@ -276,16 +283,23 @@ const connectRatingMenu: RatingMenuConnector = function connectRatingMenu(
         createURL,
       }: {
         state: SearchParameters;
-        createURL: (createURLState: SearchParameters) => string;
+        createURL: (InitOptions | RenderOptions)['createURL'];
+        getWidgetUiState: NonNullable<Widget['getWidgetUiState']>;
+        helper: AlgoliaSearchHelper;
       }) => (value: string) => string;
     };
 
     const connectorState: ConnectorState = {
       toggleRefinementFactory: (helper) => toggleRefinement.bind(null, helper),
       createURLFactory:
-        ({ state, createURL }) =>
+        ({ state, createURL, getWidgetUiState, helper }) =>
         (value) =>
-          createURL(getRefinedState(state, value)),
+          createURL((uiState) =>
+            getWidgetUiState(uiState, {
+              searchParameters: getRefinedState(state, value),
+              helper,
+            })
+          ),
     };
 
     return {
@@ -406,7 +420,12 @@ const connectRatingMenu: RatingMenuConnector = function connectRatingMenu(
           canRefine: (!hasNoResults || refinementIsApplied) && totalCount > 0,
           refine: connectorState.toggleRefinementFactory(helper),
           sendEvent,
-          createURL: connectorState.createURLFactory({ state, createURL }),
+          createURL: connectorState.createURLFactory({
+            state,
+            createURL,
+            helper,
+            getWidgetUiState: this.getWidgetUiState,
+          }),
           widgetParams,
         };
       },
@@ -420,25 +439,25 @@ const connectRatingMenu: RatingMenuConnector = function connectRatingMenu(
       getWidgetUiState(uiState, { searchParameters }) {
         const value = getRefinedStar(searchParameters);
 
-        if (typeof value !== 'number') {
-          return uiState;
-        }
-
-        return {
-          ...uiState,
-          ratingMenu: {
-            ...uiState.ratingMenu,
-            [attribute]: value,
+        return removeEmptyRefinementsFromUiState(
+          {
+            ...uiState,
+            ratingMenu: {
+              ...uiState.ratingMenu,
+              [attribute]: typeof value === 'number' ? value : undefined,
+            },
           },
-        };
+          attribute
+        );
       },
 
       getWidgetSearchParameters(searchParameters, { uiState }) {
         const value = uiState.ratingMenu && uiState.ratingMenu[attribute];
 
-        const withoutRefinements = searchParameters.clearRefinements(attribute);
-        const withDisjunctiveFacet =
-          withoutRefinements.addDisjunctiveFacet(attribute);
+        const withDisjunctiveFacet = searchParameters
+          .addDisjunctiveFacet(attribute)
+          .removeNumericRefinement(attribute)
+          .removeDisjunctiveFacetRefinement(attribute);
 
         if (!value) {
           return withDisjunctiveFacet.setQueryParameters({
@@ -456,5 +475,24 @@ const connectRatingMenu: RatingMenuConnector = function connectRatingMenu(
     };
   };
 };
+
+function removeEmptyRefinementsFromUiState(
+  indexUiState: IndexUiState,
+  attribute: string
+): IndexUiState {
+  if (!indexUiState.ratingMenu) {
+    return indexUiState;
+  }
+
+  if (typeof indexUiState.ratingMenu[attribute] !== 'number') {
+    delete indexUiState.ratingMenu[attribute];
+  }
+
+  if (Object.keys(indexUiState.ratingMenu).length === 0) {
+    delete indexUiState.ratingMenu;
+  }
+
+  return indexUiState;
+}
 
 export default connectRatingMenu;

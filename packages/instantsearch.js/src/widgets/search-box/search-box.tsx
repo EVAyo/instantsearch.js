@@ -1,25 +1,28 @@
 /** @jsx h */
 
+import { cx } from 'instantsearch-ui-components';
 import { h, render } from 'preact';
-import { cx } from '@algolia/ui-components-shared';
+
+import SearchBox from '../../components/SearchBox/SearchBox';
+import connectSearchBox from '../../connectors/search-box/connectSearchBox';
+import { component } from '../../lib/suit';
 import {
   getContainerNode,
   createDocumentationMessageGenerator,
 } from '../../lib/utils';
-import { component } from '../../lib/suit';
-import type { WidgetFactory, Template, RendererOptions } from '../../types';
+
+import defaultTemplates from './defaultTemplates';
+
+import type {
+  SearchBoxComponentCSSClasses,
+  SearchBoxComponentTemplates,
+} from '../../components/SearchBox/SearchBox';
 import type {
   SearchBoxConnectorParams,
   SearchBoxRenderState,
   SearchBoxWidgetDescription,
 } from '../../connectors/search-box/connectSearchBox';
-import connectSearchBox from '../../connectors/search-box/connectSearchBox';
-import type {
-  SearchBoxComponentCSSClasses,
-  SearchBoxComponentTemplates,
-} from '../../components/SearchBox/SearchBox';
-import SearchBox from '../../components/SearchBox/SearchBox';
-import defaultTemplates from './defaultTemplates';
+import type { WidgetFactory, Template, RendererOptions } from '../../types';
 
 const withUsage = createDocumentationMessageGenerator({ name: 'search-box' });
 const suit = component('SearchBox');
@@ -97,6 +100,12 @@ export type SearchBoxWidgetParams = {
    */
   searchAsYouType?: boolean;
   /**
+   * Whether to update the search state in the middle of a
+   * composition session.
+   * @default false
+   */
+  ignoreCompositionEvents?: boolean;
+  /**
    * Whether to show the reset button
    */
   showReset?: boolean;
@@ -134,6 +143,7 @@ const renderer =
     templates,
     autofocus,
     searchAsYouType,
+    ignoreCompositionEvents,
     showReset,
     showSubmit,
     showLoadingIndicator,
@@ -144,6 +154,7 @@ const renderer =
     templates: SearchBoxComponentTemplates;
     autofocus: boolean;
     searchAsYouType: boolean;
+    ignoreCompositionEvents: boolean;
     showReset: boolean;
     showSubmit: boolean;
     showLoadingIndicator: boolean;
@@ -160,6 +171,7 @@ const renderer =
         autofocus={autofocus}
         refine={refine}
         searchAsYouType={searchAsYouType}
+        ignoreCompositionEvents={ignoreCompositionEvents}
         templates={templates}
         showSubmit={showSubmit}
         showReset={showReset}
@@ -192,6 +204,7 @@ const searchBox: SearchBoxWidget = function searchBox(widgetParams) {
     cssClasses: userCssClasses = {},
     autofocus = false,
     searchAsYouType = true,
+    ignoreCompositionEvents = false,
     showReset = true,
     showSubmit = true,
     showLoadingIndicator = true,
@@ -239,6 +252,7 @@ const searchBox: SearchBoxWidget = function searchBox(widgetParams) {
     templates,
     autofocus,
     searchAsYouType,
+    ignoreCompositionEvents,
     showReset,
     showSubmit,
     showLoadingIndicator,
